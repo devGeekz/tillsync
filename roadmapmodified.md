@@ -4,9 +4,10 @@
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Frontend   │────▶│  Express API  │────▶│  PostgreSQL  │
-│  (Dashboard) │     │  (REST v1)   │     │  (Primary)   │
-└─────────────┘     └──────┬───────┘     └─────────────┘
+│   Next.js   │────▶│  Express API  │────▶│  PostgreSQL  │
+│  (Frontend) │     │  (Backend)   │     │  (Primary)   │
+│  Vercel     │     │  Railway     │     └─────────────┘
+└─────────────┘     └──────┬───────┘
                            │
               ┌────────────┼────────────┐
               ▼            ▼            ▼
@@ -21,8 +22,10 @@
 
 | Layer | Choice | Cost | Purpose |
 |-------|--------|------|---------|
-| Runtime | Node.js 22+ LTS | Free | Server |
-| Framework | Express | Free | HTTP |
+| Frontend | Next.js 14+ (App Router) | Free (Vercel) | Dashboard UI |
+| Styling | Tailwind CSS | Free | Rapid UI development |
+| Data Fetching | SWR | Free | Client-side caching + polling |
+| Backend | Node.js 22+ LTS + Express | Free (Railway) | API server |
 | Database | PostgreSQL (prod) / SQLite (dev) | Free tier | Persistent storage |
 | Cache/Sessions | Redis | Free tier (Railway) | Sessions + caching |
 | Queue | BullMQ + Redis | Free | Async SMS delivery |
@@ -30,14 +33,22 @@
 | SMS | Arkesel REST | GHS 0.035/SMS | Notifications |
 | WhatsApp | WhatsApp Business API | Free (1000 msgs/mo) | Backup channel |
 | Payments | MTN MoMo Collection API | Free (sandbox) | Webhooks |
-| Frontend | HTML + Alpine.js | Free | Dashboard UI |
-| Hosting | Railway | Free tier | Deployment |
 | Monitoring | Sentry (free tier) | Free | Error tracking |
+
+### Deployment
+
+| Service | Platform | Cost |
+|---------|----------|------|
+| Frontend (Next.js) | Vercel | Free (hobby tier) |
+| Backend (Express) | Railway | Free tier ($5 credit/mo) |
+| Database (PostgreSQL) | Railway | Free tier |
+| Cache (Redis) | Railway | Free tier |
 
 ### Cost Breakdown (Monthly)
 
 | Item | 10 Merchants | 100 Merchants | 1000 Merchants |
 |------|-------------|---------------|----------------|
+| Vercel | Free | Free | $20 |
 | Railway | Free | $20 | $100 |
 | PostgreSQL | Free | $15 | $50 |
 | Redis | Free | $10 | $30 |
@@ -141,59 +152,112 @@ CREATE TABLE referrals (
 
 ```
 tillsync/
-├── src/
-│   ├── index.js              # Server entry
-│   ├── config/
-│   │   ├── database.js       # PostgreSQL pool
-│   │   ├── redis.js          # Redis client
-│   │   └── env.js            # Environment validation
-│   ├── middleware/
-│   │   ├── auth.js           # JWT verification
-│   │   ├── tenant.js         # Tenant context extraction
-│   │   ├── rbac.js           # Role enforcement
-│   │   ├── rateLimiter.js    # Per-tenant limiting
-│   │   └── audit.js          # Audit logging
-│   ├── routes/
-│   │   ├── auth.js           # Login/register
-│   │   ├── merchants.js      # Merchant CRUD
-│   │   ├── tills.js          # Till management
-│   │   ├── attendants.js     # Attendant management
-│   │   ├── webhook.js        # MoMo callback
-│   │   └── dashboard.js      # Stats/analytics
-│   ├── services/
-│   │   ├── smsService.js     # Arkesel integration
-│   │   ├── whatsappService.js # WhatsApp Business API
-│   │   ├── momoService.js    # MoMo API helpers
-│   │   ├── queueService.js   # BullMQ job processing
-│   │   └── billingService.js # Subscription management
-│   └── utils/
-│       ├── errors.js         # Custom error classes
-│       └── validators.js     # Input validation (zod)
-├── public/
-│   ├── index.html            # Landing page
-│   ├── login.html            # Login
-│   ├── dashboard.html        # Main dashboard
-│   ├── settings.html         # Merchant settings
-│   └── js/
-│       └── app.js            # Alpine.js reactivity
-├── db/
-│   ├── migrations/           # Version-controlled schema
-│   └── seeds/                # Test data
-├── tests/
-│   ├── auth.test.js
-│   ├── webhook.test.js
-│   └── tenant-isolation.test.js
-├── .env.example
+├── frontend/                    # Next.js app (Vercel)
+│   ├── app/
+│   │   ├── layout.tsx           # Root layout (Tailwind)
+│   │   ├── page.tsx             # Landing page
+│   │   ├── login/
+│   │   │   └── page.tsx         # Login page
+│   │   ├── register/
+│   │   │   └── page.tsx         # Register page
+│   │   ├── dashboard/
+│   │   │   ├── layout.tsx       # Dashboard layout (sidebar)
+│   │   │   ├── page.tsx         # Overview stats
+│   │   │   ├── tills/
+│   │   │   │   └── page.tsx     # Till management
+│   │   │   ├── attendants/
+│   │   │   │   └── page.tsx     # Attendant management
+│   │   │   ├── notifications/
+│   │   │   │   └── page.tsx     # Notification history
+│   │   │   └── settings/
+│   │   │       └── page.tsx     # Merchant settings
+│   │   └── not-found.tsx        # 404 page
+│   ├── components/
+│   │   ├── ui/                  # Reusable UI components
+│   │   │   ├── Button.tsx
+│   │   │   ├── Card.tsx
+│   │   │   ├── Input.tsx
+│   │   │   ├── Table.tsx
+│   │   │   └── Modal.tsx
+│   │   ├── layout/
+│   │   │   ├── Sidebar.tsx
+│   │   │   ├── Header.tsx
+│   │   │   └── DashboardLayout.tsx
+│   │   ├── tills/
+│   │   │   ├── TillCard.tsx
+│   │   │   └── TillForm.tsx
+│   │   ├── attendants/
+│   │   │   ├── AttendantTable.tsx
+│   │   │   └── AttendantForm.tsx
+│   │   └── notifications/
+│   │       └── NotificationTable.tsx
+│   ├── lib/
+│   │   ├── api.ts               # Axios instance for Express API
+│   │   ├── auth.ts              # Auth helpers (token management)
+│   │   └── types.ts             # TypeScript interfaces
+│   ├── hooks/
+│   │   ├── useAuth.ts           # Auth state hook
+│   │   ├── useTills.ts          # SWR hook for tills
+│   │   └── useNotifications.ts  # SWR hook for notifications
+│   ├── middleware.ts             # Next.js middleware (auth guard)
+│   ├── next.config.js
+│   ├── tailwind.config.ts
+│   ├── tsconfig.json
+│   └── package.json
+│
+├── backend/                     # Express API (Railway)
+│   ├── src/
+│   │   ├── index.js             # Server entry
+│   │   ├── config/
+│   │   │   ├── database.js      # PostgreSQL pool
+│   │   │   ├── redis.js         # Redis client
+│   │   │   └── env.js           # Environment validation
+│   │   ├── middleware/
+│   │   │   ├── auth.js          # JWT verification
+│   │   │   ├── tenant.js        # Tenant context extraction
+│   │   │   ├── rbac.js          # Role enforcement
+│   │   │   ├── rateLimiter.js   # Per-tenant limiting
+│   │   │   └── audit.js         # Audit logging
+│   │   ├── routes/
+│   │   │   ├── auth.js          # Login/register
+│   │   │   ├── merchants.js     # Merchant CRUD
+│   │   │   ├── tills.js         # Till management
+│   │   │   ├── attendants.js    # Attendant management
+│   │   │   ├── webhook.js       # MoMo callback
+│   │   │   └── dashboard.js     # Stats/analytics
+│   │   ├── services/
+│   │   │   ├── smsService.js    # Arkesel integration
+│   │   │   ├── whatsappService.js # WhatsApp Business API
+│   │   │   ├── momoService.js   # MoMo API helpers
+│   │   │   ├── queueService.js  # BullMQ job processing
+│   │   │   └── billingService.js # Subscription management
+│   │   └── utils/
+│   │       ├── errors.js        # Custom error classes
+│   │       └── validators.js    # Input validation (zod)
+│   ├── db/
+│   │   ├── migrations/          # Version-controlled schema
+│   │   └── seeds/               # Test data
+│   ├── tests/
+│   │   ├── auth.test.js
+│   │   ├── webhook.test.js
+│   │   └── tenant-isolation.test.js
+│   ├── .env.example
+│   ├── .env
+│   ├── package.json
+│   └── README.md
+│
+├── .env.example                 # Root env template
 ├── .gitignore
-├── package.json
-└── README.md
+├── roadmapmodified.md
+├── roadmap.md
+└── tillsyncbase.md
 ```
 
 ---
 
-## Phase 1: Foundation + Auth (Week 1)
+## Phase 1a: Backend Foundation + Auth (Days 1-3)
 
-**Goal:** Multi-tenant server with authentication.
+**Goal:** Multi-tenant Express server with authentication.
 
 ### Deliverables
 1. Express server with middleware pipeline
@@ -206,6 +270,8 @@ tillsync/
 
 ### Dependencies
 ```
+cd backend
+npm init -y
 npm install express pg redis connect-redis express-session
 npm install jsonwebtoken bcryptjs zod helmet cors
 npm install express-rate-limit bullmq
@@ -214,7 +280,29 @@ npm install --save-dev nodemon
 
 ---
 
-## Phase 2: MoMo Webhook + Notifications (Week 2)
+## Phase 1b: Frontend Foundation (Days 3-5)
+
+**Goal:** Next.js app with Tailwind, routing, and API client.
+
+### Deliverables
+1. Next.js app with App Router + TypeScript
+2. Tailwind CSS configured
+3. Folder structure created
+4. API client (`lib/api.ts`) pointing to Express backend
+5. Auth middleware (redirect to login if not authenticated)
+6. Login/Register pages
+7. Dashboard layout with sidebar
+
+### Dependencies
+```
+cd frontend
+npx create-next-app@latest . --typescript --tailwind --app --eslint
+npm install axios swr
+```
+
+---
+
+## Phase 2: MoMo Webhook + Notifications (Days 5-8)
 
 **Goal:** Receive payments, send confirmations.
 
@@ -237,29 +325,51 @@ MoMo → POST /webhook/momo → Validate signature → Check idempotency
 
 ---
 
-## Phase 3: Dashboard + State Management (Week 3)
+## Phase 3: Dashboard Pages (Days 8-12)
 
-**Goal:** Full merchant dashboard with session management.
+**Goal:** Full merchant dashboard with Next.js.
 
 ### Deliverables
-1. Redis-backed sessions (express-session + connect-redis)
-2. Session-based auth (cookie) + API auth (JWT)
-3. Dashboard routes:
-   - `GET /dashboard` — stats overview
-   - `GET /merchants` — list merchants
-   - `POST /merchants` — create merchant
-   - `GET /tills` — list tills
-   - `POST /tills` — create till
-   - `POST /tills/:id/attendants` — assign attendant
-   - `GET /notifications` — notification history
-   - `GET /settings` — merchant settings
-4. Dashboard HTML (Alpine.js for reactivity)
-5. Mobile-responsive design
-6. Real-time notification count (polling or WebSocket)
+1. **Dashboard Overview** (`/dashboard`)
+   - Stats cards (total tills, active attendants, notifications today)
+   - Recent notifications table
+   - Quick actions (add till, add attendant)
+
+2. **Till Management** (`/dashboard/tills`)
+   - List all tills with status
+   - Create new till form
+   - Edit/delete till
+   - View attendants assigned to each till
+
+3. **Attendant Management** (`/dashboard/attendants`)
+   - List all attendants
+   - Create new attendant form
+   - Assign/unassign attendants to tills
+
+4. **Notification History** (`/dashboard/notifications`)
+   - Filterable table (by date, status, till)
+   - Export to CSV
+
+5. **Settings** (`/dashboard/settings`)
+   - Merchant profile
+   - Subscription status
+   - API keys management
+
+### Data Fetching Pattern
+```typescript
+// hooks/useTills.ts
+import useSWR from 'swr';
+import { api } from '@/lib/api';
+
+export function useTills() {
+  const { data, error, isLoading } = useSWR('/api/v1/tills', api.get);
+  return { tills: data, isLoading, error };
+}
+```
 
 ---
 
-## Phase 4: Billing + Referrals (Week 4)
+## Phase 4: Billing + Referrals (Days 12-15)
 
 **Goal:** Subscription system and agent referrals.
 
@@ -278,7 +388,7 @@ MoMo → POST /webhook/momo → Validate signature → Check idempotency
 
 ---
 
-## Phase 5: Monitoring + Security (Week 5)
+## Phase 5: Monitoring + Security (Days 15-18)
 
 **Goal:** Production-ready monitoring and security.
 
@@ -297,18 +407,26 @@ MoMo → POST /webhook/momo → Validate signature → Check idempotency
 
 ---
 
-## Phase 6: Deploy + Demo (Week 6)
+## Phase 6: Deploy + Demo (Days 18-21)
 
 **Goal:** Live production deployment.
 
 ### Deliverables
-1. Railway deployment (auto-deploy from GitHub)
-2. Environment variables configured
-3. Database migrations run
-4. MoMo sandbox → production switch
-5. Demo script for investors/judges
-6. README with setup instructions
-7. Postman collection for API testing
+1. **Vercel (Frontend)**
+   - Connect GitHub repo
+   - Set environment variables (NEXT_PUBLIC_API_URL)
+   - Auto-deploy on push
+
+2. **Railway (Backend)**
+   - Connect GitHub repo
+   - Set environment variables
+   - Add PostgreSQL + Redis services
+   - Auto-deploy on push
+
+3. **MoMo sandbox → production switch**
+4. **Demo script for investors/judges**
+5. **README with setup instructions**
+6. **Postman collection for API testing**
 
 ---
 
@@ -411,9 +529,10 @@ GET    /api/v1/referrals/stats     — Referral statistics
 
 ## Environment Variables
 
+### Backend (.env)
 ```env
 # Server
-PORT=3000
+PORT=4000
 NODE_ENV=development
 
 # Database
@@ -444,6 +563,15 @@ WHATSAPP_PHONE_NUMBER_ID=your-phone-id
 SENTRY_DSN=your-sentry-dsn
 
 # App
-APP_URL=http://localhost:3000
+APP_URL=http://localhost:4000
 WEBHOOK_SECRET=your-webhook-secret
+```
+
+### Frontend (.env.local)
+```env
+# API
+NEXT_PUBLIC_API_URL=http://localhost:4000
+
+# App
+NEXT_PUBLIC_APP_NAME=TillSync
 ```
