@@ -2,58 +2,242 @@
 
 ## Collaborator Split
 
+The project is split into two independent services that communicate via HTTP. Each collaborator owns one service and never edits the other's directory without asking first.
+
 | | Collaborator A | Collaborator B |
 |---|---|---|
 | **Focus** | Backend (Express API) | Frontend (Next.js) |
 | **Directory** | `backend/` | `frontend/` |
 | **Stack** | Express, Prisma, Neon, Redis, BullMQ | Next.js, Tailwind, SWR, TypeScript |
 | **Port** | 4000 | 3000 |
+| **Owns** | All API logic, database, webhooks, SMS | All UI, pages, components, styling |
+
+### Why This Split Works
+
+```
+┌─────────────────┐         ┌──────────────────┐
+│   Collaborator B │         │   Collaborator A  │
+│   Frontend       │  HTTP   │   Backend         │
+│   (Next.js)      │────────▶│   (Express)       │
+│                  │         │                   │
+│   Owns:          │         │   Owns:           │
+│   - Pages        │         │   - Routes        │
+│   - Components   │         │   - Middleware     │
+│   - Styling      │         │   - Services      │
+│   - SWR hooks    │         │   - Prisma schema │
+│                  │         │   - Database      │
+└─────────────────┘         └──────────────────┘
+```
+
+**The rule:** Collaborator A never touches `frontend/`. Collaborator B never touches `backend/`. They communicate via the API contract.
 
 ---
 
 ## Coordination Points (Do First)
 
-Before splitting work, both collaborators must agree on:
+Before splitting work, both collaborators must do these three things together (same day, same time if possible).
 
 ### 1. API Contract (`api-contract.md`)
-Create this file together before starting. Define:
-- All endpoint URLs
-- Request body shapes
-- Response body shapes
-- Error response formats
-- Auth header format
+
+This is the agreement between frontend and backend. Create this file together before writing any code.
+
+**How to create it:**
+1. Sit together (or video call)
+2. List every feature the dashboard needs
+3. For each feature, define:
+   - What URL does the frontend call?
+   - What data does it send?
+   - What data does it expect back?
+4. Write it all in `api-contract.md`
+5. Both sign off on it
+
+**Example entry:**
+```markdown
+### Create Till
+- **Endpoint:** POST /api/v1/tills
+- **Auth:** Bearer token required
+- **Request Body:**
+  ```json
+  {
+    "tillNumber": "12345",
+    "name": "Main Counter"
+  }
+  ```
+- **Success Response (201):**
+  ```json
+  {
+    "id": "uuid",
+    "tillNumber": "12345",
+    "name": "Main Counter",
+    "isActive": true,
+    "createdAt": "2026-01-15T10:30:00Z"
+  }
+  ```
+- **Error Response (400):**
+  ```json
+  {
+    "error": "Till number already exists"
+  }
+  ```
+```
+
+**Why this matters:**
+- Collaborator B knows exactly what data to expect
+- Collaborator A knows exactly what to return
+- No guessing, no "it doesn't work" back-and-forth
+
+---
 
 ### 2. Git Branching Strategy
-```
-main (production)
-├── dev (integration branch)
-│   ├── backend/* (Collaborator A branches)
-│   └── frontend/* (Collaborator B branches)
+
+Both collaborators must follow this exact workflow:
+
+**Step 1: Clone the repo**
+```bash
+git clone https://github.com/devGeekz/tillsync.git
+cd tillsync
 ```
 
-**Rules:**
-- Never push directly to `main`
-- Create feature branches: `backend/auth`, `frontend/dashboard`
-- Merge to `dev` first, then `dev` → `main`
-- Pull from `dev` before starting new work
+**Step 2: Create the `dev` branch (one time only)**
+```bash
+git checkout -b dev
+git push -u origin dev
+```
+
+**Step 3: Create feature branches (every new task)**
+```bash
+# Collaborator A
+git checkout dev
+git checkout -b backend/auth
+
+# Collaborator B
+git checkout dev
+git checkout -b frontend/login
+```
+
+**Step 4: Work on your branch**
+```bash
+# Make changes, commit often
+git add .
+git commit -m "feat: add JWT auth middleware"
+```
+
+**Step 5: Push and merge to `dev`**
+```bash
+git push -u origin backend/auth
+# Then merge via GitHub PR (or locally):
+git checkout dev
+git merge backend/auth
+git push origin dev
+```
+
+**Step 6: Delete your feature branch**
+```bash
+git branch -d backend/auth
+git push origin --delete backend/auth
+```
+
+**Branch naming convention:**
+- Backend: `backend/auth`, `backend/webhook`, `backend/tills`
+- Frontend: `frontend/login`, `frontend/dashboard`, `frontend/tills`
+
+**The golden rule:** Always pull from `dev` before starting a new branch:
+```bash
+git checkout dev
+git pull origin dev
+git checkout -b backend/new-feature
+```
+
+---
 
 ### 3. Environment Variables
-Both agree on variable names (no renaming without telling the other):
 
-**Backend (.env):**
-```
+Both collaborators must agree on variable names. Never rename a variable without telling the other person.
+
+**Collaborator A creates `backend/.env`:**
+```env
 PORT=4000
-DATABASE_URL=neon_connection_string
+DATABASE_URL=postgresql://user:pass@ep-xxx.neon.tech/tillsync?sslmode=require
 REDIS_URL=redis://localhost:6379
-JWT_SECRET=shared_secret
+JWT_SECRET=my-secret-key-agreed-both
 MOMO_API_KEY=xxx
+MOMO_API_SECRET=xxx
+MOMO_SUBSCRIPTION_KEY=xxx
+MOMO_ENVIRONMENT=sandbox
 ARKESEL_API_KEY=xxx
+ARKESEL_SENDER=TillSync
+WHATSAPP_API_TOKEN=xxx
+WHATSAPP_PHONE_NUMBER_ID=xxx
+APP_URL=http://localhost:4000
+WEBHOOK_SECRET=xxx
 ```
 
-**Frontend (.env.local):**
-```
+**Collaborator B creates `frontend/.env.local`:**
+```env
 NEXT_PUBLIC_API_URL=http://localhost:4000
+NEXT_PUBLIC_APP_NAME=TillSync
 ```
+
+**Shared secrets (must match):**
+- `JWT_SECRET` — both use the same value
+- `WEBHOOK_SECRET` — backend validates, but frontend might display it
+
+---
+
+## Communication Rules
+
+### Daily Standup (5 minutes)
+Every day, both collaborators share:
+1. What I did yesterday
+2. What I'm doing today
+3. Any blockers
+
+Can be done via WhatsApp, Slack, or in-person.
+
+### When You Need to Change Something the Other Person Uses
+
+**Scenario 1: You need to change an API endpoint**
+1. Tell Collaborator B before making the change
+2. Update `api-contract.md`
+3. Wait for confirmation
+4. Make the change
+
+**Scenario 2: You need to change a shared variable**
+1. Tell the other person
+2. Both update their `.env` files
+3. Test that it still works
+
+**Scenario 3: You're stuck on something**
+1. Tell the other person immediately
+2. Don't wait until end of day
+3. The other person might have the answer
+
+---
+
+## How to Test Your Work
+
+### Collaborator A (Backend)
+```bash
+cd backend
+npm run dev
+# Test with curl or Postman
+curl http://localhost:4000/api/v1/auth/me
+```
+
+### Collaborator B (Frontend)
+```bash
+cd frontend
+npm run dev
+# Open http://localhost:3000
+# Check browser console for errors
+```
+
+### Integration Test (Both)
+1. Collaborator A: `npm run dev` in `backend/`
+2. Collaborator B: `npm run dev` in `frontend/`
+3. Open http://localhost:3000
+4. Try to login
+5. If it works, the integration is correct
 
 ---
 
@@ -261,6 +445,60 @@ Both verify:
 - **Daily sync**: Quick 5-min standup (what I did, what I'm doing, blockers)
 - **Blockers**: If blocked, tell the other person immediately
 - **API changes**: If changing the API contract, tell the other person before pushing
+
+---
+
+## Step-by-Step Setup (Day 1)
+
+### Collaborator A — Backend Setup
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/devGeekz/tillsync.git
+cd tillsync
+
+# 2. Create backend directory and initialize
+mkdir backend
+cd backend
+npm init -y
+
+# 3. Install dependencies
+npm install express @prisma/client redis connect-redis express-session
+npm install jsonwebtoken bcryptjs zod helmet cors
+npm install express-rate-limit bullmq
+npm install --save-dev prisma nodemon
+
+# 4. Initialize Prisma
+npx prisma init
+
+# 5. Create .env file (copy from roadmapmodified.md)
+# 6. Set up Neon database and update DATABASE_URL in .env
+
+# 7. Run migration
+npx prisma migrate dev --name init
+
+# 8. Start server
+npm run dev
+```
+
+### Collaborator B — Frontend Setup
+
+```bash
+# 1. Clone the repo (same repo, different person)
+git clone https://github.com/devGeekz/tillsync.git
+cd tillsync
+
+# 2. Create frontend with Next.js
+npx create-next-app@latest frontend --typescript --tailwind --app --eslint
+cd frontend
+
+# 3. Install additional deps
+npm install axios swr
+
+# 4. Create .env.local (copy from roadmapmodified.md)
+# 5. Start dev server
+npm run dev
+```
 
 ---
 
