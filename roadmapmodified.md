@@ -26,7 +26,7 @@
 | Styling | Tailwind CSS | Free | Rapid UI development |
 | Data Fetching | SWR | Free | Client-side caching + polling |
 | Backend | Node.js 22+ LTS + Express | Free (Railway) | API server |
-| Database | PostgreSQL (prod) / SQLite (dev) | Free tier | Persistent storage |
+| Database | PostgreSQL (Neon) + Prisma ORM | Free tier | Persistent storage |
 | Cache/Sessions | Redis | Free tier (Railway) | Sessions + caching |
 | Queue | BullMQ + Redis | Free | Async SMS delivery |
 | Auth | JWT + express-session | Free | Authentication |
@@ -41,7 +41,7 @@
 |---------|----------|------|
 | Frontend (Next.js) | Vercel | Free (hobby tier) |
 | Backend (Express) | Railway | Free tier ($5 credit/mo) |
-| Database (PostgreSQL) | Railway | Free tier |
+| Database (PostgreSQL) | Neon | Free tier |
 | Cache (Redis) | Railway | Free tier |
 
 ### Cost Breakdown (Monthly)
@@ -50,7 +50,7 @@
 |------|-------------|---------------|----------------|
 | Vercel | Free | Free | $20 |
 | Railway | Free | $20 | $100 |
-| PostgreSQL | Free | $15 | $50 |
+| PostgreSQL (Neon) | Free | $15 | $50 |
 | Redis | Free | $10 | $30 |
 | Arkesel SMS | GHS 35 | GHS 350 | GHS 3,500 |
 | WhatsApp | Free | $5 | $50 |
@@ -58,92 +58,147 @@
 
 ---
 
-## Database Schema (PostgreSQL)
+## Database Schema (Prisma + PostgreSQL)
 
-```sql
--- Multi-tenant: every table has tenant_id
-CREATE TABLE tenants (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  phone TEXT UNIQUE NOT NULL,
-  email TEXT,
-  subscription_status TEXT DEFAULT 'trial',
-  subscription_expires_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW()
-);
+`backend/prisma/schema.prisma`:
 
-CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID REFERENCES tenants(id),
-  phone TEXT NOT NULL,
-  name TEXT NOT NULL,
-  role TEXT CHECK (role IN ('owner', 'manager', 'attendant')),
-  password_hash TEXT,
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(tenant_id, phone)
-);
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
 
-CREATE TABLE tills (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID REFERENCES tenants(id),
-  till_number TEXT NOT NULL,
-  name TEXT,
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(tenant_id, till_number)
-);
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
 
-CREATE TABLE till_attendants (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  till_id UUID REFERENCES tills(id),
-  attendant_id UUID REFERENCES users(id),
-  created_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(till_id, attendant_id)
-);
+model Tenant {
+  id                    String   @id @default(uuid())
+  name                  String
+  phone                 String   @unique
+  email                 String?
+  subscriptionStatus    String   @default("trial") @map("subscription_status")
+  subscriptionExpiresAt DateTime? @map("subscription_expires_at")
+  createdAt             DateTime @default(now()) @map("created_at")
+  users                 User[]
+  tills                 Till[]
+  notifications         Notification[]
+  webhookLogs           WebhookLog[]
+  auditLogs             AuditLog[]
+  referralsReferrer     Referral[] @relation("ReferrerTenant")
+  referralsReferred     Referral[] @relation("ReferredTenant")
 
-CREATE TABLE notifications (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID REFERENCES tenants(id),
-  till_id UUID REFERENCES tills(id),
-  amount DECIMAL(10,2),
-  currency TEXT DEFAULT 'GHS',
-  sender_name TEXT,
-  sender_phone TEXT,
-  channel TEXT CHECK (channel IN ('sms', 'whatsapp')),
-  status TEXT CHECK (status IN ('pending', 'sent', 'delivered', 'failed')),
-  external_id TEXT,
-  created_at TIMESTAMP DEFAULT NOW()
-);
+  @@map("tenants")
+}
 
-CREATE TABLE webhook_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID,
-  payload JSONB,
-  processed BOOLEAN DEFAULT false,
-  error TEXT,
-  created_at TIMESTAMP DEFAULT NOW()
-);
+model User {
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  phone          String
+  name           String
+  role           String   // owner, manager, attendant
+  passwordHash   String   @map("password_hash")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  attendants     TillAttendant[]
+  auditLogs      AuditLog[]
 
-CREATE TABLE audit_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID REFERENCES tenants(id),
-  user_id UUID REFERENCES users(id),
-  action TEXT NOT NULL,
-  entity TEXT,
-  entity_id UUID,
-  details JSONB,
-  created_at TIMESTAMP DEFAULT NOW()
-);
+  @@unique([tenantId, phone])
+  @@map("users")
+}
 
-CREATE TABLE referrals (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  referrer_tenant_id UUID REFERENCES tenants(id),
-  referred_tenant_id UUID REFERENCES tenants(id),
-  status TEXT DEFAULT 'pending',
-  commission_earned DECIMAL(10,2) DEFAULT 0,
-  created_at TIMESTAMP DEFAULT NOW()
-);
+model Till {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  tillNumber    String   @map("till_number")
+  name          String?
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  attendants    TillAttendant[]
+  notifications Notification[]
+
+  @@unique([tenantId, tillNumber])
+  @@map("tills")
+}
+
+model TillAttendant {
+  id          String   @id @default(uuid())
+  tillId      String   @map("till_id")
+  attendantId String   @map("attendant_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  till        Till     @relation(fields: [tillId], references: [id])
+  attendant   User     @relation(fields: [attendantId], references: [id])
+
+  @@unique([tillId, attendantId])
+  @@map("till_attendants")
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  tillId      String   @map("till_id")
+  amount      Decimal  @db.Decimal(10, 2)
+  currency    String   @default("GHS")
+  senderName  String?  @map("sender_name")
+  senderPhone String?  @map("sender_phone")
+  channel     String   // sms, whatsapp
+  status      String   // pending, sent, delivered, failed
+  externalId  String?  @map("external_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  till        Till     @relation(fields: [tillId], references: [id])
+
+  @@map("notifications")
+}
+
+model WebhookLog {
+  id        String   @id @default(uuid())
+  tenantId  String?  @map("tenant_id")
+  payload   Json
+  processed Boolean  @default(false)
+  error     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@map("webhook_logs")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  userId    String   @map("user_id")
+  action    String
+  entity    String?
+  entityId  String?  @map("entity_id")
+  details   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Referral {
+  id               String   @id @default(uuid())
+  referrerTenantId String   @map("referrer_tenant_id")
+  referredTenantId String   @map("referred_tenant_id")
+  status           String   @default("pending")
+  commissionEarned Decimal  @default(0) @db.Decimal(10, 2) @map("commission_earned")
+  createdAt        DateTime @default(now()) @map("created_at")
+  referrerTenant   Tenant   @relation("ReferrerTenant", fields: [referrerTenantId], references: [id])
+  referredTenant   Tenant   @relation("ReferredTenant", fields: [referredTenantId], references: [id])
+
+  @@map("referrals")
+}
+```
+
+### Run Migration
+```bash
+cd backend
+npx prisma migrate dev --name init
+npx prisma generate
 ```
 
 ---
@@ -206,10 +261,12 @@ tillsync/
 │   └── package.json
 │
 ├── backend/                     # Express API (Railway)
+│   ├── prisma/
+│   │   └── schema.prisma        # Prisma schema (Neon PostgreSQL)
 │   ├── src/
 │   │   ├── index.js             # Server entry
 │   │   ├── config/
-│   │   │   ├── database.js      # PostgreSQL pool
+│   │   │   ├── database.js      # Prisma client singleton
 │   │   │   ├── redis.js         # Redis client
 │   │   │   └── env.js           # Environment validation
 │   │   ├── middleware/
@@ -234,9 +291,9 @@ tillsync/
 │   │   └── utils/
 │   │       ├── errors.js        # Custom error classes
 │   │       └── validators.js    # Input validation (zod)
-│   ├── db/
-│   │   ├── migrations/          # Version-controlled schema
-│   │   └── seeds/               # Test data
+│   ├── prisma/                   # Prisma schema + migrations
+│   │   ├── schema.prisma
+│   │   └── migrations/
 │   ├── tests/
 │   │   ├── auth.test.js
 │   │   ├── webhook.test.js
@@ -261,7 +318,7 @@ tillsync/
 
 ### Deliverables
 1. Express server with middleware pipeline
-2. PostgreSQL connection (pg library)
+2. Prisma client connected to Neon PostgreSQL
 3. Redis connection for sessions
 4. JWT authentication (login/register)
 5. Role-based access middleware (owner/manager/attendant)
@@ -272,10 +329,11 @@ tillsync/
 ```
 cd backend
 npm init -y
-npm install express pg redis connect-redis express-session
+npm install express @prisma/client redis connect-redis express-session
 npm install jsonwebtoken bcryptjs zod helmet cors
 npm install express-rate-limit bullmq
-npm install --save-dev nodemon
+npm install --save-dev prisma nodemon
+npx prisma init
 ```
 
 ---
@@ -420,7 +478,8 @@ export function useTills() {
 2. **Railway (Backend)**
    - Connect GitHub repo
    - Set environment variables
-   - Add PostgreSQL + Redis services
+   - Add Redis service
+   - Connect to Neon PostgreSQL (set DATABASE_URL)
    - Auto-deploy on push
 
 3. **MoMo sandbox → production switch**
@@ -535,8 +594,8 @@ GET    /api/v1/referrals/stats     — Referral statistics
 PORT=4000
 NODE_ENV=development
 
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/tillsync
+# Database (Neon PostgreSQL)
+DATABASE_URL=postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/tillsync?sslmode=require
 
 # Redis
 REDIS_URL=redis://localhost:6379
