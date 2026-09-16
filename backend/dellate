@@ -19,4 +19,38 @@
 }
 
 Option 'moduleResolution=node10' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '"ignoreDeprecations": "6.0"' to silence this error.
-  Visit https://aka.ms/ts6 for migration information.
+  Visit https://aka.ms/ts6 for migration information.import express, { Request, Response } from 'express';
+import helmet from 'helmet';
+import cors from 'cors';
+import { env } from './config/env';
+import { prisma } from './config/database';
+
+const app = express();
+
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+
+app.get('/health', (req: Request, res: Response) => {
+  res.json({ status: 'ok' });
+});
+
+// Routes mount here as we build them:
+// app.use('/api/v1/auth', autahRoutes);
+
+app.listen(env.port, () => {
+  console.log(`TillSync backend running on port ${env.port}`);
+});
+
+
+
+app.get('/db-check', async (req: Request, res: Response) => {
+  try {
+    const count = await prisma.tenant.count();
+    res.json({ connected: true, tenantCount: count });
+  } catch (err) {
+    res.status(500).json({ connected: false, error: (err as Error).message });
+  }
+});
+
+Property 'tenant' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.

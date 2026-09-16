@@ -4,4 +4,126 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                    String         @id @default(uuid())
+  name                  String
+  phone                 String         @unique
+  email                 String?
+  subscriptionStatus    String         @default("trial") @map("subscription_status")
+  subscriptionExpiresAt DateTime?      @map("subscription_expires_at")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  users                 User[]
+  tills                 Till[]
+  notifications         Notification[]
+  webhookLogs           WebhookLog[]
+  auditLogs             AuditLog[]
+  referralsReferrer     Referral[]     @relation("ReferrerTenant")
+  referralsReferred     Referral[]     @relation("ReferredTenant")
+
+  @@map("tenants")
+}
+
+model User {
+  id           String          @id @default(uuid())
+  tenantId     String          @map("tenant_id")
+  phone        String
+  name         String
+  role         String
+  passwordHash String          @map("password_hash")
+  isActive     Boolean         @default(true) @map("is_active")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  tenant       Tenant          @relation(fields: [tenantId], references: [id])
+  attendants   TillAttendant[]
+  auditLogs    AuditLog[]
+
+  @@unique([tenantId, phone])
+  @@map("users")
+}
+
+model Till {
+  id            String          @id @default(uuid())
+  tenantId      String          @map("tenant_id")
+  tillNumber    String          @map("till_number")
+  name          String?
+  isActive      Boolean         @default(true) @map("is_active")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  tenant        Tenant          @relation(fields: [tenantId], references: [id])
+  attendants    TillAttendant[]
+  notifications Notification[]
+
+  @@unique([tenantId, tillNumber])
+  @@map("tills")
+}
+
+model TillAttendant {
+  id          String   @id @default(uuid())
+  tillId      String   @map("till_id")
+  attendantId String   @map("attendant_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  till        Till     @relation(fields: [tillId], references: [id])
+  attendant   User     @relation(fields: [attendantId], references: [id])
+
+  @@unique([tillId, attendantId])
+  @@map("till_attendants")
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  tillId      String   @map("till_id")
+  amount      Decimal  @db.Decimal(10, 2)
+  currency    String   @default("GHS")
+  senderName  String?  @map("sender_name")
+  senderPhone String?  @map("sender_phone")
+  channel     String
+  status      String
+  externalId  String?  @map("external_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  till        Till     @relation(fields: [tillId], references: [id])
+
+  @@map("notifications")
+}
+
+model WebhookLog {
+  id        String   @id @default(uuid())
+  tenantId  String?  @map("tenant_id")
+  payload   Json
+  processed Boolean  @default(false)
+  error     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@map("webhook_logs")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  userId    String   @map("user_id")
+  action    String
+  entity    String?
+  entityId  String?  @map("entity_id")
+  details   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Referral {
+  id               String   @id @default(uuid())
+  referrerTenantId String   @map("referrer_tenant_id")
+  referredTenantId String   @map("referred_tenant_id")
+  status           String   @default("pending")
+  commissionEarned Decimal  @default(0) @map("commission_earned") @db.Decimal(10, 2)
+  createdAt        DateTime @default(now()) @map("created_at")
+  referrerTenant   Tenant   @relation("ReferrerTenant", fields: [referrerTenantId], references: [id])
+  referredTenant   Tenant   @relation("ReferredTenant", fields: [referredTenantId], references: [id])
+
+  @@map("referrals")
 }
