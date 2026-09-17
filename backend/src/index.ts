@@ -5,13 +5,13 @@ import { env } from './config/env';
 import { prisma } from './config/database';
 import { connectRedis, redisClient } from './config/redis';
 import { AppError } from './utils/errors';
+import authRoutes from './routes/auth';
 
 const app = express();
 
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
-
 
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok' });
@@ -36,15 +36,9 @@ app.get('/redis-check', async (req: Request, res: Response) => {
   }
 });
 
-async function start() {
-  await connectRedis();
-  app.listen(env.port, () => {
-    console.log(`TillSync backend running on port ${env.port}`);
-  });
-}
+app.use('/api/v1/auth', authRoutes);
 
-start();
-
+// error handler — must be registered last, after all routes
 app.use((err: any, req: Request, res: Response, next: any) => {
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({ error: err.message });
@@ -58,3 +52,12 @@ app.use((err: any, req: Request, res: Response, next: any) => {
   console.error(err);
   res.status(500).json({ error: 'Internal server error' });
 });
+
+async function start() {
+  await connectRedis();
+  app.listen(env.port, () => {
+    console.log(`TillSync backend running on port ${env.port}`);
+  });
+}
+
+start();
