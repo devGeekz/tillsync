@@ -40,4 +40,27 @@ router.post('/', async (req, res) => {
   res.status(201).json({ data: { id: user.id, name: user.name, phone: user.phone, role: user.role } });
 });
 
+router.put('/:id', async (req, res) => {
+  const { name, phone } = req.body ?? {};
+  const details = required(req.body, ['name', 'phone']);
+  if (phone && !PHONE_RE.test(phone)) details.push({ field: 'phone', message: 'Invalid phone number' });
+  if (details.length) return badRequest(res, details);
+
+  const user = await prisma.user.findFirst({ where: { id: req.params.id, tenantId: req.auth.tenantId, role: 'attendant' } });
+  if (!user) return res.status(404).json({ error: 'Attendant not found' });
+
+  const dupe = await prisma.user.findUnique({ where: { phone } });
+  if (dupe && dupe.id !== user.id) return res.status(400).json({ error: 'Phone number already exists' });
+
+  const updated = await prisma.user.update({ where: { id: user.id }, data: { name, phone } });
+  res.json({ data: { id: updated.id, name: updated.name, phone: updated.phone, role: updated.role } });
+});
+
+router.delete('/:id', async (req, res) => {
+  const user = await prisma.user.findFirst({ where: { id: req.params.id, tenantId: req.auth.tenantId, role: 'attendant' } });
+  if (!user) return res.status(404).json({ error: 'Attendant not found' });
+  await prisma.user.delete({ where: { id: user.id } }); // TillAttendant rows cascade
+  res.json({ message: 'Attendant deleted successfully' });
+});
+
 export default router;

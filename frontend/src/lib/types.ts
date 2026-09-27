@@ -31,6 +31,7 @@ export interface Attendant {
   name: string;
   phone: string;
   assignedAt?: string;
+  tills?: { id: string; tillNumber: string }[];
 }
 
 // ─── Notification ──────────────────────────────────────

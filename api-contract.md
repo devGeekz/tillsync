@@ -529,6 +529,50 @@ Create a new attendant.
 
 ---
 
+#### PUT /api/v1/attendants/:id
+Update an attendant's name or phone.
+
+**Request:**
+```json
+{
+  "name": "Kofi Mensah",
+  "phone": "+233244789012"
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "id": "attendant-uuid",
+    "name": "Kofi Mensah",
+    "phone": "+233244789012",
+    "role": "attendant"
+  }
+}
+```
+
+**Errors:**
+- `404` — Attendant not found
+- `400` — Phone number already exists / invalid phone
+
+---
+
+#### DELETE /api/v1/attendants/:id
+Delete an attendant. Till assignments are removed automatically.
+
+**Response (200):**
+```json
+{
+  "message": "Attendant deleted successfully"
+}
+```
+
+**Errors:**
+- `404` — Attendant not found
+
+---
+
 ### 5. Webhooks
 
 #### POST /api/v1/webhook/momo

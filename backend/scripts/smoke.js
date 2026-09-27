@@ -65,6 +65,11 @@ const attendantId = r.json?.data?.id;
 // 8. list attendants
 r = await call('GET', '/api/v1/attendants', { token });
 check('list attendants → includes new one', r.status === 200 && r.json?.data?.some((a) => a.id === attendantId), `got ${r.status}`);
+const attendantPhone = `+233${Date.now().toString().slice(-8)}9`;
+
+// 8b. update attendant
+r = await call('PUT', `/api/v1/attendants/${attendantId}`, { token, body: { name: 'Smoke Attendant Renamed', phone: attendantPhone } });
+check('update attendant → 200', r.status === 200 && r.json?.data?.name === 'Smoke Attendant Renamed', `got ${r.status}`);
 
 // 9. assign attendant to till
 r = await call('POST', `/api/v1/tills/${tillId}/attendants`, { token, body: { attendantId } });
@@ -93,6 +98,12 @@ check('login → 200 + token', r.status === 200 && !!r.json?.token, `got ${r.sta
 // 15. wrong password → 401
 r = await call('POST', '/api/v1/auth/login', { body: { phone, password: 'wrong-password' } });
 check('wrong password → 401', r.status === 401, `got ${r.status}`);
+
+// 16. delete attendant → then update → 404
+r = await call('DELETE', `/api/v1/attendants/${attendantId}`, { token });
+check('delete attendant → 200', r.status === 200, `got ${r.status}`);
+r = await call('PUT', `/api/v1/attendants/${attendantId}`, { token, body: { name: 'Ghost', phone: attendantPhone } });
+check('update deleted → 404', r.status === 404, `got ${r.status}`);
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');
 process.exit(failures ? 1 : 0);

@@ -1,20 +1,36 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { api, apiError } from '@/lib/api';
+import { setToken, setStoredUser } from '@/lib/auth';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  // ponytail: fake submit until backend exists
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!phone || !password) setError('Fill in all fields');
-    else setError('Backend not ready yet');
+    if (!phone || !password) return setError('Fill in all fields');
+    setBusy(true);
+    setError('');
+    try {
+      const { data } = await api.post('/api/v1/auth/login', { phone, password });
+      setToken(data.token);
+      setStoredUser(data.data);
+      router.push('/dashboard');
+      router.refresh();
+    } catch (err) {
+      setError(apiError(err));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -41,7 +57,9 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
           />
           {error && <p className="text-sm text-red-500">{error}</p>}
-          <Button type="submit" className="w-full">Login</Button>
+          <Button type="submit" className="w-full" disabled={busy}>
+            {busy ? 'Signing in…' : 'Login'}
+          </Button>
         </form>
 
         <p className="mt-6 text-center text-sm text-zinc-500">

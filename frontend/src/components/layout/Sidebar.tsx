@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { api } from '@/lib/api';
+import { clearToken } from '@/lib/auth';
 
 const links = [
   { href: '/dashboard', label: 'Dashboard', icon: '▦' },
@@ -15,6 +17,19 @@ const links = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function logout() {
+    try {
+      await api.post('/api/v1/auth/logout');
+    } catch {
+      // stateless logout — clear client credentials regardless
+    }
+    clearToken();
+    router.push('/login');
+    router.refresh();
+  }
+
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex">
       <div className="border-b border-zinc-200 px-6 py-5 text-lg font-bold text-[#22C55E]">TillSync</div>
@@ -33,9 +48,9 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="border-t border-zinc-200 p-3">
-        <Link href="/login" className="block rounded-lg px-3 py-2.5 text-sm text-zinc-600 hover:bg-zinc-100">
+        <button onClick={logout} className="block w-full rounded-lg px-3 py-2.5 text-left text-sm text-zinc-600 hover:bg-zinc-100">
           ↩ Logout
-        </Link>
+        </button>
       </div>
     </aside>
   );
