@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                   String         @id @default(uuid())
+  name                 String
+  subscriptionStatus   String         @default("trial")
+  subscriptionExpiresAt DateTime?
+  createdAt            DateTime       @default(now())
+  users                User[]
+  tills                Till[]
+  notifications        Notification[]
+}
+
+model User {
+  id            String           @id @default(uuid())
+  phone         String           @unique
+  name          String
+  email         String?
+  passwordHash  String
+  role          String           @default("owner") // owner | manager | attendant
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId      String
+  createdAt     DateTime         @default(now())
+  tillAssignments TillAttendant[]
+}
+
+model Till {
+  id           String           @id @default(uuid())
+  tillNumber   String
+  name         String
+  isActive     Boolean          @default(true)
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId     String
+  createdAt    DateTime         @default(now())
+  attendants   TillAttendant[]
+  notifications Notification[]
+
+  @@unique([tenantId, tillNumber])
+}
+
+model TillAttendant {
+  attendant    String
+  till         String
+  assignedAt   DateTime   @default(now())
+  attendantRel User       @relation(fields: [attendant], references: [id], onDelete: Cascade)
+  tillRel      Till       @relation(fields: [till], references: [id], onDelete: Cascade)
+
+  @@id([till, attendant])
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId    String
+  till        Till?    @relation(fields: [tillId], references: [id], onDelete: SetNull)
+  tillId      String?
+  tillNumber  String
+  amount      Float
+  currency    String   @default("GHS")
+  senderName  String?
+  senderPhone String?
+  channel     String   @default("sms")
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+}

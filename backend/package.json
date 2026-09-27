@@ -1,0 +1,22 @@
+{
+  "name": "tillsync-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --env-file=.env src/index.js",
+    "start": "node --env-file=.env src/index.js",
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "smoke": "node --env-file=.env scripts/smoke.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^6",
+    "bcryptjs": "^3",
+    "cors": "^2.8.5",
+    "express": "^5",
+    "jsonwebtoken": "^9"
+  },
+  "devDependencies": {
+    "prisma": "^6"
+  }
+}

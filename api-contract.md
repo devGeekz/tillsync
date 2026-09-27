@@ -475,6 +475,31 @@ Remove an attendant from a till.
 
 ---
 
+#### GET /api/v1/attendants
+List all attendants for the current merchant.
+
+**Request:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "attendant-uuid",
+      "name": "Kofi",
+      "phone": "+233244789012",
+      "tills": [{ "id": "till-uuid", "tillNumber": "12345" }]
+    }
+  ],
+  "total": 5
+}
+```
+
+---
+
 #### POST /api/v1/attendants
 Create a new attendant.
 
