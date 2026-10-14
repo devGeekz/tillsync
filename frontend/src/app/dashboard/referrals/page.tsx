@@ -1,27 +1,25 @@
 'use client';
 
 import { useState } from 'react';
+import useSWR from 'swr';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { fetcher } from '@/lib/api';
+import type { ApiResponse, ReferralCode, ReferralStats } from '@/lib/types';
 
-// ponytail: static demo data until backend exists
-const stats = [
-  { label: 'Total Referrals', value: '5' },
-  { label: 'Successful', value: '3' },
-  { label: 'Pending', value: '2' },
-  { label: 'Commission', value: 'GHS 15' },
-];
-
-const referred = [
-  { name: "Ama's Store", date: 'Jan 10, 2026', status: 'Successful', commission: 'GHS 5' },
-  { name: 'Kente Shop', date: 'Jan 22, 2026', status: 'Successful', commission: 'GHS 5' },
-  { name: 'Accra Electronics', date: 'Feb 1, 2026', status: 'Pending', commission: '—' },
-];
+interface ReferralStatsWithList extends ReferralStats {
+  referrals: { name: string; joinedAt: string; status: string; commission: number }[];
+}
 
 export default function ReferralsPage() {
   const [copied, setCopied] = useState('');
-  const code = 'KWAME2026';
-  const link = `https://tillsync.app/register?ref=${code}`;
+  const { data: codeRes } = useSWR<ApiResponse<ReferralCode>>('/api/v1/referrals/code', fetcher);
+  const { data: statsRes } = useSWR<ApiResponse<ReferralStatsWithList>>('/api/v1/referrals/stats', fetcher);
+
+  const code = codeRes?.data?.code ?? '········';
+  const link = codeRes?.data?.link ?? '';
+  const stats = statsRes?.data;
+  const referred = stats?.referrals ?? [];
 
   function copy(text: string, what: string) {
     navigator.clipboard.writeText(text);
@@ -38,16 +36,21 @@ export default function ReferralsPage() {
         </p>
         <p className="mt-3 select-all break-all rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-500">{link}</p>
         <div className="mt-4 flex gap-3">
-          <Button onClick={() => copy(code, 'code')}>{copied === 'code' ? 'Copied!' : 'Copy Code'}</Button>
-          <Button variant="secondary" onClick={() => copy(link, 'link')}>{copied === 'link' ? 'Copied!' : 'Copy Link'}</Button>
+          <Button onClick={() => copy(code, 'code')} disabled={!codeRes}>{copied === 'code' ? 'Copied!' : 'Copy Code'}</Button>
+          <Button variant="secondary" onClick={() => copy(link, 'link')} disabled={!codeRes}>{copied === 'link' ? 'Copied!' : 'Copy Link'}</Button>
         </div>
       </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((s) => (
+        {[
+          { label: 'Total Referrals', value: stats?.totalReferrals },
+          { label: 'Successful', value: stats?.successfulReferrals },
+          { label: 'Pending', value: stats?.pendingReferrals },
+          { label: 'Commission', value: stats ? `GH¢${stats.totalCommission}` : undefined },
+        ].map((s) => (
           <Card key={s.label}>
             <p className="text-sm text-zinc-500">{s.label}</p>
-            <p className="mt-1 text-2xl font-bold text-zinc-900">{s.value}</p>
+            <p className="mt-1 text-2xl font-bold text-zinc-900">{s.value ?? '—'}</p>
           </Card>
         ))}
       </div>
@@ -63,18 +66,26 @@ export default function ReferralsPage() {
             </tr>
           </thead>
           <tbody>
-            {referred.map((r, i) => (
-              <tr key={i} className="border-b border-zinc-100">
-                <td className="py-3 font-medium">{r.name}</td>
-                <td className="py-3 text-zinc-500">{r.date}</td>
-                <td className="py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${r.status === 'Successful' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                    {r.status}
-                  </span>
+            {referred.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-zinc-400">
+                  Nobody has used your code yet.
                 </td>
-                <td className="py-3">{r.commission}</td>
               </tr>
-            ))}
+            ) : (
+              referred.map((r) => (
+                <tr key={r.name} className="border-b border-zinc-100">
+                  <td className="py-3 font-medium">{r.name}</td>
+                  <td className="py-3 text-zinc-500">{new Date(r.joinedAt).toLocaleDateString()}</td>
+                  <td className="py-3">
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${r.status === 'successful' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                      {r.status === 'successful' ? 'Successful' : 'Pending'}
+                    </span>
+                  </td>
+                  <td className="py-3">{r.commission ? `GH¢${r.commission}` : '—'}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </Card>

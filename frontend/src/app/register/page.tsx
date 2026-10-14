@@ -26,12 +26,15 @@ export default function RegisterPage() {
     setBusy(true);
     setError('');
     try {
+      // ponytail: read the ?ref= code from the URL directly — useSearchParams would need a Suspense boundary
+      const ref = new URLSearchParams(window.location.search).get('ref');
       const { data } = await api.post('/api/v1/auth/register', {
         name,
         phone,
         password,
         ...(email ? { email } : {}),
         ...(momo ? { momoNumber: momo } : {}),
+        ...(ref ? { ref } : {}),
       });
       setToken(data.token);
       setStoredUser(data.data);

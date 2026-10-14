@@ -6,6 +6,8 @@ import attendantRoutes from './routes/attendants.js';
 import notificationRoutes from './routes/notifications.js';
 import dashboardRoutes from './routes/dashboard.js';
 import webhookRoutes from './routes/webhooks.js';
+import billingRoutes from './routes/billing.js';
+import referralRoutes from './routes/referrals.js';
 
 const app = express();
 app.use(cors()); // ponytail: open CORS for dev; restrict to APP_URL origin in production
@@ -18,6 +20,8 @@ app.use('/api/v1/attendants', attendantRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/webhook', webhookRoutes);
+app.use('/api/v1/billing', billingRoutes);
+app.use('/api/v1/referrals', referralRoutes);
 
 app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body' });

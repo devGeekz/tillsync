@@ -11,6 +11,9 @@ model Tenant {
   id                   String         @id @default(uuid())
   name                 String
   momoNumber           String?        @unique // the MoMo number payments arrive on — how the webhook finds us
+  plan                 String         @default("trial")
+  referralCode         String?        @unique
+  referredById         String?        // tenant id of the referrer (plain column, no FK needed)
   subscriptionStatus   String         @default("trial")
   subscriptionExpiresAt DateTime?
   createdAt            DateTime       @default(now())

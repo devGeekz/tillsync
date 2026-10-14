@@ -90,8 +90,6 @@ export interface ReferralCode {
 }
 
 export interface ReferralStats {
-  code: string;
-  link: string;
   totalReferrals: number;
   successfulReferrals: number;
   pendingReferrals: number;

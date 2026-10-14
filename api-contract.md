@@ -176,6 +176,7 @@ Authorization: Bearer <token>
     "name": "Kwame's Shop",
     "phone": "+233244123456",
     "email": "kwame@example.com",
+    "momoNumber": "+233201234567",
     "role": "owner",
     "tenantId": "tenant-uuid-here"
   }
@@ -185,6 +186,64 @@ Authorization: Bearer <token>
 **Errors:**
 - `401` — Not authenticated
 - `404` — User not found
+
+---
+
+#### POST /api/v1/auth/change-password
+Change the current user's password.
+
+**Request:**
+```json
+{
+  "currentPassword": "securepass123",
+  "newPassword": "newsecurepass456"
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "Password updated successfully"
+}
+```
+
+**Errors:**
+- `401` — Current password is incorrect / not authenticated
+- `400` — New password shorter than 8 characters
+
+---
+
+#### PUT /api/v1/auth/profile
+Update the current merchant's profile. Business name and MoMo number are saved on the tenant, the rest on the user.
+
+**Request:**
+```json
+{
+  "name": "Kwame's Shop",
+  "phone": "+233244123456",
+  "email": "kwame@example.com",
+  "momoNumber": "+233201234567"
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "Kwame's Shop",
+    "phone": "+233244123456",
+    "momoNumber": "+233201234567",
+    "email": "kwame@example.com",
+    "role": "owner",
+    "tenantId": "tenant-uuid"
+  }
+}
+```
+
+**Errors:**
+- `400` — Phone / MoMo number already registered, invalid fields
+- `401` — Not authenticated
 
 ---
 
@@ -777,6 +836,7 @@ Subscribe to a plan.
 **Errors:**
 - `400` — Invalid plan
 - `402` — Payment failed
+- `501` — Returned while online payment is not enabled (current state)
 
 ---
 
@@ -804,7 +864,7 @@ Get invoice history.
 ### 9. Referrals
 
 #### GET /api/v1/referrals/code
-Get referral code for current merchant.
+Get referral code for current merchant. Created on first call, then reused.
 
 **Request:**
 ```
@@ -821,6 +881,9 @@ Authorization: Bearer <token>
 }
 ```
 
+**Notes:**
+- Passing that `ref` code when registering a merchant attributes them to the referrer
+
 ---
 
 #### GET /api/v1/referrals/stats
@@ -834,10 +897,22 @@ Get referral statistics.
     "successfulReferrals": 3,
     "pendingReferrals": 2,
     "totalCommission": 15.00,
-    "currency": "GHS"
+    "currency": "GHS",
+    "referrals": [
+      {
+        "name": "Ama's Store",
+        "joinedAt": "2026-01-10T10:30:00Z",
+        "status": "successful",
+        "commission": 5.00
+      }
+    ]
   }
 }
 ```
+
+**Notes:**
+- `referrals` — one entry per merchant this one referred, newest first
+- `commission` is always `0` until payouts are implemented
 
 ---
 

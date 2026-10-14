@@ -150,7 +150,59 @@ check('POST notification → 201 sent to attendant', r.status === 201 && r.json?
 r = await call('POST', '/api/v1/notifications', { token, body: { tillId, amount: -5 } });
 check('POST notification bad amount → 400', r.status === 400, `got ${r.status}`);
 
-// 19. delete attendant → then update → 404
+// 19. billing, referrals, profile
+r = await call('GET', '/api/v1/billing/subscription', { token });
+check(
+  'billing → plan + usage',
+  r.status === 200 && r.json?.data?.plan === 'trial' && r.json?.data?.tillsUsed >= 1,
+  `got ${r.status}`
+);
+
+r = await call('POST', '/api/v1/billing/subscribe', { token, body: { plan: 'basic', paymentMethod: 'momo', phone } });
+check('billing subscribe → 501 not wired', r.status === 501, `got ${r.status}`);
+
+r = await call('GET', '/api/v1/referrals/code', { token });
+const referralCode = r.json?.data?.code;
+check('referrals code → 200 + 8 chars', r.status === 200 && /^[A-Z0-9]{8}$/.test(referralCode ?? ''), `got ${r.status} ${referralCode}`);
+
+r = await call('GET', '/api/v1/referrals/code', { token });
+check('referrals code is stable', r.json?.data?.code === referralCode, `got ${r.json?.data?.code}`);
+
+r = await call('GET', '/api/v1/referrals/stats', { token });
+check('referrals stats → 0 total', r.status === 200 && r.json?.data?.totalReferrals === 0, `got ${r.status}`);
+
+r = await call('PUT', '/api/v1/auth/profile', {
+  token,
+  body: { name: 'Renamed Shop', momoNumber: `+23320${Date.now().toString().slice(-8)}`, email: 'shop@example.com' },
+});
+check('profile update → 200', r.status === 200 && r.json?.data?.momoNumber?.startsWith('+23320'), `got ${r.status} ${r.json?.error ?? ''}`);
+
+r = await call('PUT', '/api/v1/auth/profile', { token, body: { name: 'X', momoNumber: '123' } });
+check('profile bad momo → 400', r.status === 400, `got ${r.status}`);
+
+r = await call('PUT', '/api/v1/auth/profile', { body: { name: 'No Auth' } });
+check('profile without token → 401', r.status === 401, `got ${r.status}`);
+
+// 20. a referred merchant counts toward the referrer
+const referredPhone = `+233${Date.now().toString().slice(-9)}`;
+r = await call('POST', '/api/v1/auth/register', {
+  body: { name: 'Referred Shop', phone: referredPhone, password: 'password123', ref: referralCode },
+});
+check('register with ref → 201', r.status === 201, `got ${r.status}`);
+r = await call('GET', '/api/v1/referrals/stats', { token });
+check('referral counted → 1 total + listed', r.json?.data?.totalReferrals === 1 && r.json?.data?.referrals?.[0]?.name === 'Referred Shop', `got ${r.json?.data?.totalReferrals}`);
+
+// 20b. change password
+r = await call('POST', '/api/v1/auth/change-password', { token, body: { currentPassword: 'wrong', newPassword: 'newpassword123' } });
+check('change password wrong current → 401', r.status === 401, `got ${r.status}`);
+r = await call('POST', '/api/v1/auth/change-password', { token, body: { currentPassword: 'password123', newPassword: 'short' } });
+check('change password too short → 400', r.status === 400, `got ${r.status}`);
+r = await call('POST', '/api/v1/auth/change-password', { token, body: { currentPassword: 'password123', newPassword: 'newpassword123' } });
+check('change password → 200', r.status === 200, `got ${r.status}`);
+r = await call('POST', '/api/v1/auth/login', { body: { phone, password: 'newpassword123' } });
+check('login with new password → 200', r.status === 200, `got ${r.status}`);
+
+// 21. delete attendant → then update → 404
 r = await call('DELETE', `/api/v1/attendants/${attendantId}`, { token });
 check('delete attendant → 200', r.status === 200, `got ${r.status}`);
 r = await call('PUT', `/api/v1/attendants/${attendantId}`, { token, body: { name: 'Ghost', phone: attendantPhone } });
