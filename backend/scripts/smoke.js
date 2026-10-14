@@ -1,14 +1,17 @@
 // Smoke test: server + Neon must be running first (npm run dev, DATABASE_URL set).
 // Exercises the full merchant flow end-to-end against the API contract.
+import crypto from 'node:crypto';
+
 const base = process.env.APP_URL ?? 'http://localhost:4000';
 let failures = 0;
 
-async function call(method, path, { token, body } = {}) {
+async function call(method, path, { token, body, signature } = {}) {
   const res = await fetch(base + path, {
     method,
     headers: {
       'content-type': 'application/json',
       ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...(signature ? { 'x-tillsync-signature': signature } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -24,6 +27,7 @@ function check(label, cond, extra = '') {
 }
 
 const phone = `+233${Date.now().toString().slice(-9)}`;
+const momoNumber = `+23320${Date.now().toString().slice(-8)}`;
 const tillNumber = `T${Date.now().toString().slice(-5)}`;
 
 // 1. unauthenticated → 401
@@ -32,7 +36,7 @@ check('me without token → 401', r.status === 401, `got ${r.status}`);
 
 // 2. register
 r = await call('POST', '/api/v1/auth/register', {
-  body: { name: 'Smoke Test Shop', phone, password: 'password123' },
+  body: { name: 'Smoke Test Shop', phone, password: 'password123', momoNumber },
 });
 check('register → 201 + token', r.status === 201 && !!r.json?.token, `got ${r.status}`);
 const token = r.json?.token;
@@ -99,7 +103,54 @@ check('login → 200 + token', r.status === 200 && !!r.json?.token, `got ${r.sta
 r = await call('POST', '/api/v1/auth/login', { body: { phone, password: 'wrong-password' } });
 check('wrong password → 401', r.status === 401, `got ${r.status}`);
 
-// 16. delete attendant → then update → 404
+// 16. MoMo webhook → notification + SMS
+const sign = (body) =>
+  crypto.createHmac('sha256', process.env.WEBHOOK_SECRET).update(JSON.stringify(body)).digest('hex');
+const callback = {
+  momoNumber,
+  tillNumber,
+  amount: '150.00',
+  currency: 'GHS',
+  externalId: `smoke-${Date.now()}`,
+  payer: { partyIdType: 'MSISDN', partyId: '244123456' },
+  status: 'SUCCESSFUL',
+  referenceId: `ref-${Date.now()}`,
+};
+
+r = await call('POST', '/api/v1/webhook/momo', { body: callback }); // no signature
+check('webhook without signature → 401', r.status === 401, `got ${r.status}`);
+
+r = await call('POST', '/api/v1/webhook/momo', { body: callback, signature: 'deadbeef' });
+check('webhook bad signature → 401', r.status === 401, `got ${r.status}`);
+
+r = await call('POST', '/api/v1/webhook/momo', { body: callback, signature: sign(callback) });
+check('webhook → 200 received', r.status === 200 && r.json?.status === 'received', `got ${r.status} ${JSON.stringify(r.json)}`);
+
+r = await call('POST', '/api/v1/webhook/momo', { body: callback, signature: sign(callback) });
+check('webhook replay → duplicate', r.status === 200 && r.json?.status === 'duplicate', `got ${r.status}`);
+
+r = await call('POST', '/api/v1/webhook/momo', {
+  body: { ...callback, momoNumber: '+233209999999', externalId: `smoke-x-${Date.now()}` },
+  signature: 'nope',
+});
+check('webhook bad sig before lookup → 401', r.status === 401, `got ${r.status}`);
+
+// 17. the notification landed and is listed
+r = await call('GET', '/api/v1/notifications?page=1&limit=10', { token });
+const found = r.json?.data?.some((n) => n.senderPhone === '+244123456');
+check('notification from webhook is listed', r.status === 200 && found, `got ${r.status}`);
+
+// 18. manual notification via API
+r = await call('POST', '/api/v1/notifications', {
+  token,
+  body: { tillId, amount: 75, senderName: 'Manual Entry', senderPhone: '+233244999888' },
+});
+check('POST notification → 201 sent to attendant', r.status === 201 && r.json?.data?.status === 'sent', `got ${r.status} ${r.json?.data?.status}`);
+
+r = await call('POST', '/api/v1/notifications', { token, body: { tillId, amount: -5 } });
+check('POST notification bad amount → 400', r.status === 400, `got ${r.status}`);
+
+// 19. delete attendant → then update → 404
 r = await call('DELETE', `/api/v1/attendants/${attendantId}`, { token });
 check('delete attendant → 200', r.status === 200, `got ${r.status}`);
 r = await call('PUT', `/api/v1/attendants/${attendantId}`, { token, body: { name: 'Ghost', phone: attendantPhone } });

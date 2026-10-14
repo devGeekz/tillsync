@@ -10,7 +10,7 @@ import { setToken, setStoredUser } from '@/lib/auth';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', momo: '', password: '', confirm: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -20,7 +20,7 @@ export default function RegisterPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const { name, phone, email, password, confirm } = form;
+    const { name, phone, email, momo, password, confirm } = form;
     if (!name || !phone || !password || !confirm) return setError('Fill in all fields');
     if (password !== confirm) return setError('Passwords do not match');
     setBusy(true);
@@ -31,6 +31,7 @@ export default function RegisterPage() {
         phone,
         password,
         ...(email ? { email } : {}),
+        ...(momo ? { momoNumber: momo } : {}),
       });
       setToken(data.token);
       setStoredUser(data.data);
@@ -52,6 +53,7 @@ export default function RegisterPage() {
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <Input id="name" label="Business Name" placeholder="Kwame's Shop" value={form.name} onChange={set('name')} />
           <Input id="phone" label="Phone" type="tel" placeholder="+233 XX XXX XXXX" value={form.phone} onChange={set('phone')} />
+          <Input id="momo" label="MoMo Number (optional)" type="tel" placeholder="+233 XX XXX XXXX — payments to this number notify your attendants" value={form.momo} onChange={set('momo')} />
           <Input id="email" label="Email (optional)" type="email" placeholder="you@example.com" value={form.email} onChange={set('email')} />
           <Input id="password" label="Password" type="password" placeholder="••••••••" value={form.password} onChange={set('password')} />
           <Input id="confirm" label="Confirm Password" type="password" placeholder="••••••••" value={form.confirm} onChange={set('confirm')} />

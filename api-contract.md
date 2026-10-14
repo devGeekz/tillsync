@@ -83,9 +83,14 @@ Register a new merchant account.
   "name": "Kwame's Shop",
   "phone": "+233244123456",
   "email": "kwame@example.com",
-  "password": "securepass123"
+  "password": "securepass123",
+  "momoNumber": "+233201234567"
 }
 ```
+
+**Notes:**
+- `momoNumber` (optional) — the mobile-money number this merchant receives payments on.
+  Payments sent to it trigger TillSync notifications. Must be unique.
 
 **Response (201):**
 ```json
@@ -573,6 +578,44 @@ Delete an attendant. Till assignments are removed automatically.
 
 ---
 
+#### POST /api/v1/notifications
+Create a notification record. Used by the MoMo webhook, by tests, and for manual entries. Sending the SMS happens automatically (queued) — this endpoint only records.
+
+**Request:**
+```json
+{
+  "tillId": "till-uuid",
+  "amount": 150.00,
+  "currency": "GHS",
+  "senderName": "John Doe",
+  "senderPhone": "+233244123456",
+  "channel": "sms"
+}
+```
+
+**Response (201):**
+```json
+{
+  "data": {
+    "id": "notification-uuid",
+    "tillNumber": "12345",
+    "amount": 150.00,
+    "currency": "GHS",
+    "senderName": "John Doe",
+    "senderPhone": "+233244123456",
+    "channel": "sms",
+    "status": "pending",
+    "createdAt": "2026-01-15T10:30:00Z"
+  }
+}
+```
+
+**Errors:**
+- `404` — Till not found
+- `400` — Missing amount / tillId
+
+---
+
 ### 5. Webhooks
 
 #### POST /api/v1/webhook/momo
@@ -581,6 +624,8 @@ MoMo payment callback. This endpoint is called by MTN MoMo, not by the frontend.
 **Request (from MoMo):**
 ```json
 {
+  "momoNumber": "+233201234567",
+  "tillNumber": "12345",
   "amount": "150.00",
   "currency": "GHS",
   "externalId": "ORDER-123",
@@ -593,18 +638,17 @@ MoMo payment callback. This endpoint is called by MTN MoMo, not by the frontend.
 }
 ```
 
-**Response (200):**
-```json
-{
-  "status": "received"
-}
+**Signature:**
+```
+X-TillSync-Signature: <HMAC-SHA256 of raw body using MOMO_WEBHOOK_SECRET>
 ```
 
 **Notes:**
+- `momoNumber` identifies the merchant (matches their registered number), `tillNumber` the till
+- `externalId` / `referenceId` — resending the same callback is a no-op (deduped), returns `status: "duplicate"`
+- Only `SUCCESSFUL` payments create notifications; other statuses are logged and ignored
 - This endpoint does NOT require JWT auth
-- It validates webhook signature instead
-- Logs the webhook payload
-- Queues SMS notification to attendant
+- It validates the signature instead, then SMSes the till's attendants
 
 ---
 

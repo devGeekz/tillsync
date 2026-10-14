@@ -131,6 +131,7 @@ export interface RegisterRequest {
   name: string;
   phone: string;
   email?: string;
+  momoNumber?: string;
   password: string;
 }
 

@@ -10,6 +10,7 @@ datasource db {
 model Tenant {
   id                   String         @id @default(uuid())
   name                 String
+  momoNumber           String?        @unique // the MoMo number payments arrive on — how the webhook finds us
   subscriptionStatus   String         @default("trial")
   subscriptionExpiresAt DateTime?
   createdAt            DateTime       @default(now())
@@ -68,5 +69,6 @@ model Notification {
   senderPhone String?
   channel     String   @default("sms")
   status      String   @default("pending")
+  externalId  String?  @unique // payment provider reference — dedupes webhook retries
   createdAt   DateTime @default(now())
 }

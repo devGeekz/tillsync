@@ -10,20 +10,24 @@ const router = Router();
 const DUMMY_HASH = bcrypt.hashSync('unused', 10);
 
 router.post('/register', async (req, res) => {
-  const { name, phone, email, password } = req.body ?? {};
+  const { name, phone, email, password, momoNumber } = req.body ?? {};
   const details = required(req.body, ['name', 'phone', 'password']);
   if (phone && !PHONE_RE.test(phone)) details.push({ field: 'phone', message: 'Invalid phone number' });
   if (password && password.length < 8) details.push({ field: 'password', message: 'Password must be at least 8 characters' });
   if (email && !/^\S+@\S+\.\S+$/.test(email)) details.push({ field: 'email', message: 'Invalid email' });
+  if (momoNumber && !PHONE_RE.test(momoNumber)) details.push({ field: 'momoNumber', message: 'Invalid mobile money number' });
   if (details.length) return badRequest(res, details);
 
   if (await prisma.user.findUnique({ where: { phone } })) {
     return res.status(400).json({ error: 'Phone number already registered' });
   }
+  if (momoNumber && (await prisma.tenant.findUnique({ where: { momoNumber } }))) {
+    return res.status(400).json({ error: 'Mobile money number already registered' });
+  }
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.$transaction(async (tx) => {
-    const tenant = await tx.tenant.create({ data: { name } });
+    const tenant = await tx.tenant.create({ data: { name, momoNumber: momoNumber || null } });
     return tx.user.create({
       data: { name, phone, email: email || null, passwordHash, tenantId: tenant.id },
     });
