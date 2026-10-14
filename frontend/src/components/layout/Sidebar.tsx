@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { clearToken, getStoredUser } from '@/lib/auth';
+import { clearStoredUser, getStoredUser } from '@/lib/auth';
 
 // managerOnly pages 403 for attendants — hiding the link is convenience, the API is the guard
 const links = [
@@ -23,12 +23,8 @@ export function Sidebar() {
   const visible = links.filter((l) => !l.managerOnly || user?.role !== 'attendant');
 
   async function logout() {
-    try {
-      await api.post('/api/v1/auth/logout');
-    } catch {
-      // stateless logout — clear client credentials regardless
-    }
-    clearToken();
+    await api.post('/api/auth/logout').catch(() => {});
+    clearStoredUser();
     router.push('/login');
     router.refresh();
   }

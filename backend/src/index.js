@@ -8,11 +8,34 @@ import dashboardRoutes from './routes/dashboard.js';
 import webhookRoutes from './routes/webhooks.js';
 import billingRoutes from './routes/billing.js';
 import referralRoutes from './routes/referrals.js';
+import { rateLimit } from './utils/rateLimit.js';
 
 const app = express();
-app.use(cors()); // ponytail: open CORS for dev; restrict to APP_URL origin in production
+
+// browsers reach the API through the Next rewrite (same-origin), so CORS is only
+// for direct access from the app's own origin — no wildcard
+const allowedOrigins = (process.env.APP_URL ?? 'http://localhost:3000').split(',').map((o) => o.trim());
+app.use(
+  cors({
+    origin(origin, cb) {
+      cb(null, !origin || allowedOrigins.includes(origin));
+    },
+    credentials: true,
+  })
+);
+
 // rawBody kept so the webhook can verify its HMAC signature
 app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+
+// credential endpoints are the brute-force target — bcrypt makes each hit expensive,
+// this stops the flood itself
+const credentialsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  key: (req) => `${req.ip}:${req.body?.phone ?? ''}`,
+});
+app.use('/api/v1/auth/login', credentialsLimiter);
+app.use('/api/v1/auth/register', credentialsLimiter);
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/tills', tillRoutes);

@@ -1,8 +1,19 @@
 import jwt from 'jsonwebtoken';
 
+function parseCookies(header = '') {
+  const out = {};
+  for (const part of header.split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return out;
+}
+
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization ?? '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const bearer = header.startsWith('Bearer ') ? header.slice(7) : null;
+  // browsers send the httpOnly cookie; API clients send Bearer
+  const token = bearer || parseCookies(req.headers.cookie).token;
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);

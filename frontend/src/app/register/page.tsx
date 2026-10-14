@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { api, apiError } from '@/lib/api';
-import { setToken, setStoredUser } from '@/lib/auth';
+import { setStoredUser } from '@/lib/auth';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -28,7 +28,7 @@ export default function RegisterPage() {
     try {
       // ponytail: read the ?ref= code from the URL directly — useSearchParams would need a Suspense boundary
       const ref = new URLSearchParams(window.location.search).get('ref');
-      const { data } = await api.post('/api/v1/auth/register', {
+      const { data } = await api.post('/api/auth/register', {
         name,
         phone,
         password,
@@ -36,7 +36,6 @@ export default function RegisterPage() {
         ...(momo ? { momoNumber: momo } : {}),
         ...(ref ? { ref } : {}),
       });
-      setToken(data.token);
       setStoredUser(data.data);
       router.push('/dashboard');
       router.refresh();

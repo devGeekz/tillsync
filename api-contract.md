@@ -18,17 +18,36 @@ Production:  https://api.tillsync.app
 ## Authentication
 
 ### Auth Header
-Every protected endpoint requires:
+Every protected endpoint accepts either:
 ```
 Authorization: Bearer <jwt_token>
 ```
+or a session cookie:
+```
+Cookie: token=<jwt_token>
+```
+The browser path uses the cookie — the frontend calls its own `/api/auth/*` route
+handlers, which exchange credentials for an **httpOnly** cookie, so the token is
+never readable by JavaScript. Non-browser clients (scripts, smoke tests) use Bearer.
+
+### CORS
+Allowed origins are read from `APP_URL` (comma-separated). Credentials allowed.
+There is no wildcard — unknown origins simply receive no `Access-Control-Allow-Origin`.
+
+### Rate limiting
+`POST /auth/login` and `POST /auth/register` allow **10 attempts per 15 minutes** per
+IP + phone number. Further attempts return:
+```
+429 { "error": "Too many attempts. Try again later." }
+```
+with a `Retry-After` header.
 
 ### How to Get a Token
 1. Register a new merchant account
 2. Login with phone + password
 3. Response includes `token`
-4. Store token in frontend (localStorage or cookie)
-5. Send token in `Authorization` header on all requests
+4. Frontend route handler stores it in an httpOnly cookie (never in localStorage)
+5. Browsers send the cookie automatically; API clients send `Authorization: Bearer`
 
 ---
 

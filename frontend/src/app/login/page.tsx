@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { api, apiError } from '@/lib/api';
-import { setToken, setStoredUser } from '@/lib/auth';
+import { setStoredUser } from '@/lib/auth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,8 +21,7 @@ export default function LoginPage() {
     setBusy(true);
     setError('');
     try {
-      const { data } = await api.post('/api/v1/auth/login', { phone, password });
-      setToken(data.token);
+      const { data } = await api.post('/api/auth/login', { phone, password });
       setStoredUser(data.data);
       router.push('/dashboard');
       router.refresh();
