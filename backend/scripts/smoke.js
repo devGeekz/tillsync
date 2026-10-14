@@ -202,7 +202,41 @@ check('change password → 200', r.status === 200, `got ${r.status}`);
 r = await call('POST', '/api/v1/auth/login', { body: { phone, password: 'newpassword123' } });
 check('login with new password → 200', r.status === 200, `got ${r.status}`);
 
-// 21. delete attendant → then update → 404
+// 21. attendant role sees only their own tills
+const attLogin = await call('POST', '/api/v1/auth/login', {
+  body: { phone: attendantPhone, password: 'password123' },
+});
+check('attendant login → 200', attLogin.status === 200, `got ${attLogin.status}`);
+const attToken = attLogin.json?.token;
+
+r = await call('GET', '/api/v1/tills', { token: attToken });
+check('attendant sees only assigned till', r.status === 200 && r.json?.data?.length === 1 && r.json.data[0].id === tillId, `got ${r.json?.data?.length}`);
+
+r = await call('POST', '/api/v1/tills', { token: attToken, body: { tillNumber: 'HACK1', name: 'Nope' } });
+check('attendant cannot create till → 403', r.status === 403, `got ${r.status}`);
+
+r = await call('DELETE', `/api/v1/tills/${tillId}`, { token: attToken });
+check('attendant cannot delete till → 403', r.status === 403, `got ${r.status}`);
+
+r = await call('GET', '/api/v1/attendants', { token: attToken });
+check('attendant list shows only self', r.status === 200 && r.json?.data?.length === 1 && r.json.data[0].id === attendantId, `got ${r.json?.data?.length}`);
+
+r = await call('GET', '/api/v1/billing/subscription', { token: attToken });
+check('attendant blocked from billing → 403', r.status === 403, `got ${r.status}`);
+
+r = await call('GET', '/api/v1/referrals/code', { token: attToken });
+check('attendant blocked from referrals → 403', r.status === 403, `got ${r.status}`);
+
+r = await call('PUT', '/api/v1/auth/profile', { token: attToken, body: { name: 'Hijack' } });
+check('attendant cannot edit profile → 403', r.status === 403, `got ${r.status}`);
+
+r = await call('GET', '/api/v1/dashboard/stats', { token: attToken });
+check('attendant stats scoped, no attendant count', r.status === 200 && r.json?.data?.totalTills === 1 && r.json.data.totalAttendants === undefined, `got ${r.status}`);
+
+r = await call('GET', '/api/v1/notifications?page=1&limit=10', { token: attToken });
+check('attendant notifications scoped to own till', r.status === 200 && r.json?.data?.every((n) => n.tillNumber === tillNumber), `got ${r.status}`);
+
+// 22. delete attendant → then update → 404
 r = await call('DELETE', `/api/v1/attendants/${attendantId}`, { token });
 check('delete attendant → 200', r.status === 200, `got ${r.status}`);
 r = await call('PUT', `/api/v1/attendants/${attendantId}`, { token, body: { name: 'Ghost', phone: attendantPhone } });

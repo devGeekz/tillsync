@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { api, apiError, fetcher } from '@/lib/api';
+import { getStoredUser } from '@/lib/auth';
 import type { ApiResponse, Attendant, Till } from '@/lib/types';
 
 type ModalState = { mode: 'add' } | { mode: 'edit'; till: Till } | null;
@@ -109,6 +110,7 @@ export default function TillsPage() {
   const [form, setForm] = useState({ tillNumber: '', name: '', isActive: true });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const isManager = getStoredUser()?.role !== 'attendant';
   const tills = data?.data ?? [];
 
   function openAdd() {
@@ -161,7 +163,7 @@ export default function TillsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-zinc-500">{tills.length} tills</p>
-        <Button onClick={openAdd}>+ Add Till</Button>
+        {isManager && <Button onClick={openAdd}>+ Add Till</Button>}
       </div>
 
       {data && tills.length === 0 ? (
@@ -182,17 +184,19 @@ export default function TillsPage() {
                 </span>
               </div>
               <p className="mt-3 text-sm text-zinc-500">Attendants: {t.attendantCount ?? 0}</p>
-              <div className="mt-4 flex gap-2">
-                <Button variant="secondary" className="flex-1" onClick={() => openEdit(t)}>
-                  Edit
-                </Button>
-                <Button variant="secondary" className="flex-1" onClick={() => setAssigning(t)}>
-                  Attendants
-                </Button>
-                <Button variant="danger" onClick={() => remove(t)}>
-                  Delete
-                </Button>
-              </div>
+              {isManager && (
+                <div className="mt-4 flex gap-2">
+                  <Button variant="secondary" className="flex-1" onClick={() => openEdit(t)}>
+                    Edit
+                  </Button>
+                  <Button variant="secondary" className="flex-1" onClick={() => setAssigning(t)}>
+                    Attendants
+                  </Button>
+                  <Button variant="danger" onClick={() => remove(t)}>
+                    Delete
+                  </Button>
+                </div>
+              )}
             </Card>
           ))}
         </div>

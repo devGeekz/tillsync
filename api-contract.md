@@ -70,6 +70,26 @@ Authorization: Bearer <jwt_token>
 
 ---
 
+## Roles & Access
+
+`owner` and `manager` are treated the same. `attendant` is restricted:
+
+| | owner / manager | attendant |
+|---|---|---|
+| Tills: list / view | all tills in the shop | **only the tills they're assigned to** |
+| Tills: create / edit / delete / assign attendants | yes | `403` |
+| Attendants: list | all attendants | **only themselves** |
+| Attendants: create / edit / delete | yes | `403` |
+| Notifications: list / create | all | **only their assigned tills'** / `403` create |
+| Dashboard stats | includes `totalAttendants` | scoped, `totalAttendants` omitted |
+| Billing, referrals | yes | `403` |
+| Profile update | yes | `403` |
+
+**Errors:**
+- `403` — `{"error": "Not allowed for attendants"}`
+
+---
+
 ## Endpoints
 
 ### 1. Auth

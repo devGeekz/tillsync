@@ -3,21 +3,24 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { clearToken } from '@/lib/auth';
+import { clearToken, getStoredUser } from '@/lib/auth';
 
+// managerOnly pages 403 for attendants — hiding the link is convenience, the API is the guard
 const links = [
-  { href: '/dashboard', label: 'Dashboard', icon: '▦' },
-  { href: '/dashboard/tills', label: 'Tills', icon: '▤' },
-  { href: '/dashboard/attendants', label: 'Attendants', icon: '☰' },
-  { href: '/dashboard/notifications', label: 'Notifications', icon: '◔' },
-  { href: '/dashboard/billing', label: 'Billing', icon: '$' },
-  { href: '/dashboard/referrals', label: 'Referrals', icon: '✦' },
-  { href: '/dashboard/settings', label: 'Settings', icon: '⚙' },
+  { href: '/dashboard', label: 'Dashboard', icon: '▦', managerOnly: false },
+  { href: '/dashboard/tills', label: 'Tills', icon: '▤', managerOnly: false },
+  { href: '/dashboard/attendants', label: 'Attendants', icon: '☰', managerOnly: true },
+  { href: '/dashboard/notifications', label: 'Notifications', icon: '◔', managerOnly: false },
+  { href: '/dashboard/billing', label: 'Billing', icon: '$', managerOnly: true },
+  { href: '/dashboard/referrals', label: 'Referrals', icon: '✦', managerOnly: true },
+  { href: '/dashboard/settings', label: 'Settings', icon: '⚙', managerOnly: false },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const user = getStoredUser();
+  const visible = links.filter((l) => !l.managerOnly || user?.role !== 'attendant');
 
   async function logout() {
     try {
@@ -34,7 +37,7 @@ export function Sidebar() {
     <aside className="hidden w-60 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex">
       <div className="border-b border-zinc-200 px-6 py-5 text-lg font-bold text-[#22C55E]">TillSync</div>
       <nav className="flex-1 space-y-1 p-3">
-        {links.map((l) => (
+        {visible.map((l) => (
           <Link
             key={l.href}
             href={l.href}

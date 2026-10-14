@@ -1,11 +1,11 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import { prisma } from '../config/database.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireManager } from '../middleware/auth.js';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requireManager);
 
-// ponyletail: plan limits are hardcoded until there are paid plans — move to a table when prices exist
+// ponyletail: plan limits are hardcoded until there are paid plans â€” move to a table when prices exist
 const PLANS = {
   trial: { price: 0, tillsAllowed: 1, smsAllowed: 100 },
   basic: { price: 15, tillsAllowed: 3, smsAllowed: -1 },
@@ -40,7 +40,7 @@ router.get('/subscription', async (req, res) => {
   });
 });
 
-// ponytail: stub until MTN billing collection is wired — throws loudly instead of pretending to charge
+// ponytail: stub until MTN billing collection is wired â€” throws loudly instead of pretending to charge
 router.post('/subscribe', (req, res) => res.status(501).json({ error: 'Online payment not available yet' }));
 
 export default router;

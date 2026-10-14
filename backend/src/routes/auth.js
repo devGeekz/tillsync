@@ -1,7 +1,7 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../config/database.js';
-import { requireAuth, signToken } from '../middleware/auth.js';
+import { requireAuth, requireManager, signToken } from '../middleware/auth.js';
 import { PHONE_RE, required, badRequest } from '../utils/validate.js';
 import { generateReferralCode } from './referrals.js';
 
@@ -70,11 +70,12 @@ router.post('/login', async (req, res) => {
   });
 });
 
-// ponytail: stateless JWT — client drops the token; server-side revocation needs a denylist (add if tokens get stolen)
+// ponytail: stateless JWT â€” client drops the token; server-side revocation needs a denylist (add if tokens get stolen)
 router.post('/logout', (req, res) => res.json({ message: 'Logged out successfully' }));
 
 // Update the shop's profile. Business name and MoMo number live on the tenant, the rest on the user.
-router.put('/profile', requireAuth, async (req, res) => {
+// ponytail: manager-only â€” attendants can't rename the shop or change the number payments arrive on
+router.put('/profile', requireAuth, requireManager, async (req, res) => {
   const { name, phone, email, momoNumber } = req.body ?? {};
   const details = required(req.body, ['name']);
   if (phone && !PHONE_RE.test(phone)) details.push({ field: 'phone', message: 'Invalid phone number' });

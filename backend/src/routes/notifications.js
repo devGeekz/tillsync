@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../config/database.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireManager } from '../middleware/auth.js';
 import { required, badRequest } from '../utils/validate.js';
 import { createNotification, publicNotification } from '../services/notifications.js';
 
@@ -11,7 +11,11 @@ router.get('/', async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
 
-  const where = { tenantId: req.auth.tenantId };
+  const where = {
+    tenantId: req.auth.tenantId,
+    // attendants only see notifications for the tills they're on
+    ...(req.auth.role === 'attendant' ? { till: { attendants: { some: { attendant: req.auth.id } } } } : {}),
+  };
   if (req.query.status) where.status = req.query.status;
   if (req.query.tillId) where.tillId = req.query.tillId;
   if (req.query.startDate || req.query.endDate) {
@@ -49,7 +53,7 @@ router.get('/', async (req, res) => {
   });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireManager, async (req, res) => {
   const { tillId, amount, currency, senderName, senderPhone, channel } = req.body ?? {};
   const details = required(req.body, ['tillId', 'amount']);
   if (amount !== undefined && (typeof amount !== 'number' || amount <= 0)) {

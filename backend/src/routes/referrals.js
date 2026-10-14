@@ -1,9 +1,9 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import { prisma } from '../config/database.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireManager } from '../middleware/auth.js';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requireManager);
 
 // 8 chars from an unambiguous alphabet (no 0/O/1/I) so it survives being read over the phone
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -36,7 +36,7 @@ router.get('/stats', async (req, res) => {
       totalReferrals: referrals.length,
       successfulReferrals: successful,
       pendingReferrals: referrals.length - successful,
-      totalCommission: 0, // ponytail: no commission engine yet — always 0 until payouts exist
+      totalCommission: 0, // ponytail: no commission engine yet â€” always 0 until payouts exist
       currency: 'GHS',
       referrals: referrals.map((r) => ({
         name: r.name,

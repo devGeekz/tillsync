@@ -21,3 +21,19 @@ export function signToken(user) {
     { expiresIn: '7d' }
   );
 }
+
+const MANAGER_ROLES = ['owner', 'manager'];
+
+export const isManager = (req) => MANAGER_ROLES.includes(req.auth.role);
+
+// Attendants only ever see the tills they're assigned to
+export function tillScope(req) {
+  return isManager(req)
+    ? { tenantId: req.auth.tenantId }
+    : { tenantId: req.auth.tenantId, attendants: { some: { attendant: req.auth.id } } };
+}
+
+export function requireManager(req, res, next) {
+  if (!isManager(req)) return res.status(403).json({ error: 'Not allowed for attendants' });
+  next();
+}

@@ -1,6 +1,6 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import { prisma } from '../config/database.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireManager, tillScope } from '../middleware/auth.js';
 import { required, badRequest } from '../utils/validate.js';
 
 const router = Router();
@@ -16,7 +16,7 @@ const tillPublic = (t, attendantCount) => ({
 });
 
 async function findTill(req, res) {
-  const till = await prisma.till.findFirst({ where: { id: req.params.id, tenantId: req.auth.tenantId } });
+  const till = await prisma.till.findFirst({ where: { ...tillScope(req), id: req.params.id } });
   if (!till) {
     res.status(404).json({ error: 'Till not found' });
     return null;
@@ -26,7 +26,7 @@ async function findTill(req, res) {
 
 router.get('/', async (req, res) => {
   const rows = await prisma.till.findMany({
-    where: { tenantId: req.auth.tenantId },
+    where: tillScope(req),
     include: { _count: { select: { attendants: true } } },
     orderBy: { createdAt: 'asc' },
   });
@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
   res.json({ data, total: data.length });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireManager, async (req, res) => {
   const { tillNumber, name } = req.body ?? {};
   const details = required(req.body, ['tillNumber', 'name']);
   if (details.length) return badRequest(res, details);
@@ -73,7 +73,7 @@ router.get('/:id', async (req, res) => {
   });
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireManager, async (req, res) => {
   const till = await findTill(req, res);
   if (!till) return;
   const { name, isActive } = req.body ?? {};
@@ -86,18 +86,18 @@ router.put('/:id', async (req, res) => {
   res.json({ data: { id: updated.id, tillNumber: updated.tillNumber, name: updated.name, isActive: updated.isActive } });
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireManager, async (req, res) => {
   const till = await findTill(req, res);
   if (!till) return;
   await prisma.till.delete({ where: { id: till.id } });
   res.json({ message: 'Till deleted successfully' });
 });
 
-// ─── Till attendants ───────────────────────────────────
+// â”€â”€â”€ Till attendants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 router.get('/:id/attendants', async (req, res) => {
   const till = await prisma.till.findFirst({
-    where: { id: req.params.id, tenantId: req.auth.tenantId },
+    where: { ...tillScope(req), id: req.params.id },
     include: {
       attendants: {
         include: { attendantRel: { select: { id: true, name: true, phone: true } } },
@@ -116,7 +116,7 @@ router.get('/:id/attendants', async (req, res) => {
   });
 });
 
-router.post('/:id/attendants', async (req, res) => {
+router.post('/:id/attendants', requireManager, async (req, res) => {
   const { attendantId } = req.body ?? {};
   const details = required(req.body, ['attendantId']);
   if (details.length) return badRequest(res, details);
@@ -138,7 +138,7 @@ router.post('/:id/attendants', async (req, res) => {
   res.status(201).json({ message: 'Attendant assigned successfully' });
 });
 
-router.delete('/:id/attendants/:attendantId', async (req, res) => {
+router.delete('/:id/attendants/:attendantId', requireManager, async (req, res) => {
   const till = await findTill(req, res);
   if (!till) return;
   const removed = await prisma.tillAttendant.deleteMany({

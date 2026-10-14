@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { fetcher } from '@/lib/api';
+import { getStoredUser } from '@/lib/auth';
 import { timeAgo, ghs, capitalize } from '@/lib/format';
 import type { ApiResponse, ApiListResponse, DashboardStats, Notification } from '@/lib/types';
 
@@ -18,12 +19,13 @@ const statusColor: Record<string, string> = {
 export default function DashboardPage() {
   const { data: statsRes } = useSWR<ApiResponse<DashboardStats>>('/api/v1/dashboard/stats', fetcher);
   const { data: recentRes } = useSWR<ApiListResponse<Notification>>('/api/v1/notifications?limit=5', fetcher);
+  const isAttendant = getStoredUser()?.role === 'attendant';
 
   const s = statsRes?.data;
   const cards = [
     { label: 'Total Tills', value: s?.totalTills, icon: '▤' },
     { label: 'Active Tills', value: s?.activeTills, icon: '☑' },
-    { label: 'Attendants', value: s?.totalAttendants, icon: '☰' },
+    ...(isAttendant ? [] : [{ label: 'Attendants', value: s?.totalAttendants, icon: '☰' }]),
     { label: 'Notifications Today', value: s?.notificationsToday, icon: '◔' },
   ];
   const recent = recentRes?.data ?? [];
@@ -82,8 +84,10 @@ export default function DashboardPage() {
       </Card>
 
       <div className="flex gap-4">
-        <Link href="/dashboard/tills"><Button>+ Add New Till</Button></Link>
-        <Link href="/dashboard/attendants"><Button variant="secondary">+ Add Attendant</Button></Link>
+        {!isAttendant && <Link href="/dashboard/tills"><Button>+ Add New Till</Button></Link>}
+        {!isAttendant && (
+          <Link href="/dashboard/attendants"><Button variant="secondary">+ Add Attendant</Button></Link>
+        )}
       </div>
     </div>
   );

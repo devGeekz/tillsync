@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { api, apiError, fetcher } from '@/lib/api';
-import { setStoredUser } from '@/lib/auth';
+import { setStoredUser, getStoredUser } from '@/lib/auth';
 import type { ApiResponse, User } from '@/lib/types';
 
 type Me = User & { momoNumber?: string };
@@ -61,6 +61,7 @@ function ProfileForm({ initial, onSaved }: { initial: Me; onSaved: () => void })
 
 export default function SettingsPage() {
   const { data, mutate } = useSWR<ApiResponse<Me>>('/api/v1/auth/me', fetcher);
+  const isManager = getStoredUser()?.role !== 'attendant';
   const [pw, setPw] = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [pwError, setPwError] = useState('');
   const [pwMsg, setPwMsg] = useState('');
@@ -88,13 +89,15 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <Card title="Profile">
-        {!data?.data ? (
-          <p className="text-sm text-zinc-400">Loading…</p>
-        ) : (
-          <ProfileForm key={data.data.id} initial={data.data} onSaved={() => mutate()} />
-        )}
-      </Card>
+      {isManager && (
+        <Card title="Profile">
+          {!data?.data ? (
+            <p className="text-sm text-zinc-400">Loading…</p>
+          ) : (
+            <ProfileForm key={data.data.id} initial={data.data} onSaved={() => mutate()} />
+          )}
+        </Card>
+      )}
 
       <Card title="Change Password">
         <form onSubmit={changePassword} className="space-y-4">
