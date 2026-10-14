@@ -7,13 +7,105 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { api, apiError, fetcher } from '@/lib/api';
-import type { ApiResponse, Till } from '@/lib/types';
+import type { ApiResponse, Attendant, Till } from '@/lib/types';
 
 type ModalState = { mode: 'add' } | { mode: 'edit'; till: Till } | null;
+
+function AttendantsModal({ till, onClose, onChanged }: { till: Till; onClose: () => void; onChanged: () => void }) {
+  const { data: assigned, mutate: mutateAssigned } = useSWR<{ data: Attendant[] }>(`/api/v1/tills/${till.id}/attendants`, fetcher);
+  const { data: all } = useSWR<ApiResponse<Attendant[]>>('/api/v1/attendants', fetcher);
+  const [attendantId, setAttendantId] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const assignedIds = new Set((assigned?.data ?? []).map((a) => a.id));
+  const available = (all?.data ?? []).filter((a) => !assignedIds.has(a.id));
+
+  async function run(fn: () => Promise<unknown>) {
+    setBusy(true);
+    setError('');
+    try {
+      await fn();
+      await mutateAssigned();
+      onChanged();
+    } catch (err) {
+      setError(apiError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open title={`Attendants on #${till.tillNumber}`} onClose={onClose}>
+      <div className="space-y-4">
+        {assigned === undefined ? (
+          <p className="text-sm text-zinc-400">Loading…</p>
+        ) : assigned.data.length === 0 ? (
+          <p className="text-sm text-zinc-500">Nobody assigned yet. They&apos;ll get SMS alerts when this till is paid.</p>
+        ) : (
+          <ul className="divide-y divide-zinc-100">
+            {assigned.data.map((a) => (
+              <li key={a.id} className="flex items-center justify-between py-2">
+                <div>
+                  <p className="text-sm font-medium text-zinc-800">{a.name}</p>
+                  <p className="text-xs text-zinc-500">{a.phone}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  className="px-3 py-1 text-red-500"
+                  disabled={busy}
+                  onClick={() => run(() => api.delete(`/api/v1/tills/${till.id}/attendants/${a.id}`))}
+                >
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {available.length === 0 ? (
+          <p className="text-xs text-zinc-400">
+            {assignedIds.size ? 'Everyone is already assigned.' : 'Create attendants first, then assign them here.'}
+          </p>
+        ) : (
+          <div className="flex gap-2">
+            <select
+              className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+              value={attendantId}
+              onChange={(e) => setAttendantId(e.target.value)}
+            >
+              <option value="">Choose an attendant…</option>
+              {available.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} — {a.phone}
+                </option>
+              ))}
+            </select>
+            <Button
+              disabled={busy || !attendantId}
+              onClick={() =>
+                run(async () => {
+                  await api.post(`/api/v1/tills/${till.id}/attendants`, { attendantId });
+                  setAttendantId('');
+                })
+              }
+            >
+              Assign
+            </Button>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        <Button variant="secondary" className="w-full" onClick={onClose}>Done</Button>
+      </div>
+    </Modal>
+  );
+}
 
 export default function TillsPage() {
   const { data, mutate } = useSWR<ApiResponse<Till[]> & { total: number }>('/api/v1/tills', fetcher);
   const [modal, setModal] = useState<ModalState>(null);
+  const [assigning, setAssigning] = useState<Till | null>(null);
   const [form, setForm] = useState({ tillNumber: '', name: '', isActive: true });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -94,7 +186,10 @@ export default function TillsPage() {
                 <Button variant="secondary" className="flex-1" onClick={() => openEdit(t)}>
                   Edit
                 </Button>
-                <Button variant="danger" className="flex-1" onClick={() => remove(t)}>
+                <Button variant="secondary" className="flex-1" onClick={() => setAssigning(t)}>
+                  Attendants
+                </Button>
+                <Button variant="danger" onClick={() => remove(t)}>
                   Delete
                 </Button>
               </div>
@@ -147,6 +242,10 @@ export default function TillsPage() {
           </div>
         </form>
       </Modal>
+
+      {assigning && (
+        <AttendantsModal till={assigning} onClose={() => setAssigning(null)} onChanged={() => mutate()} />
+      )}
     </div>
   );
 }
