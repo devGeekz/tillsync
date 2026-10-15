@@ -8,6 +8,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import webhookRoutes from './routes/webhooks.js';
 import billingRoutes from './routes/billing.js';
 import referralRoutes from './routes/referrals.js';
+import adminRoutes from './routes/admin.js';
 import { rateLimit } from './utils/rateLimit.js';
 
 const app = express();
@@ -36,6 +37,8 @@ const credentialsLimiter = rateLimit({
 });
 app.use('/api/v1/auth/login', credentialsLimiter);
 app.use('/api/v1/auth/register', credentialsLimiter);
+app.use('/api/v1/auth/forgot-password', credentialsLimiter);
+app.use('/api/v1/auth/reset-password', credentialsLimiter);
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/tills', tillRoutes);
@@ -45,6 +48,7 @@ app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/webhook', webhookRoutes);
 app.use('/api/v1/billing', billingRoutes);
 app.use('/api/v1/referrals', referralRoutes);
+app.use('/api/v1/merchants', adminRoutes);
 
 app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body' });

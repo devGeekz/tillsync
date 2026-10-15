@@ -50,4 +50,23 @@ router.post('/momo', async (req, res) => {
   res.json({ status: 'received', notificationId: result.notification.id });
 });
 
+// Delivery report from the SMS provider: { messageId, status: delivered|failed }.
+// A 'delivered' report promotes the notification; failures are logged but don't
+// demote it — one SMS reaching an attendant is enough (ponytail: per-recipient
+// ledger when delivery proof matters).
+router.post('/sms-status', async (req, res) => {
+  if (!verifySignature(req)) return res.status(401).json({ error: 'Invalid signature' });
+
+  const { messageId, status } = req.body ?? {};
+  if (!messageId || !status) return res.status(400).json({ error: 'Missing messageId or status' });
+
+  const notification = await prisma.notification.findFirst({ where: { smsIds: { has: messageId } } });
+  if (!notification) return res.json({ status: 'unknown' });
+
+  if (status === 'delivered' && notification.status !== 'delivered') {
+    await prisma.notification.update({ where: { id: notification.id }, data: { status: 'delivered' } });
+  }
+  res.json({ status: 'received' });
+});
+
 export default router;

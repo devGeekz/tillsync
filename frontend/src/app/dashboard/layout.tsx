@@ -12,6 +12,7 @@ const titles: Record<string, string> = {
   '/dashboard/billing': 'Billing',
   '/dashboard/referrals': 'Referrals',
   '/dashboard/settings': 'Settings',
+  '/dashboard/admin': 'All Merchants',
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

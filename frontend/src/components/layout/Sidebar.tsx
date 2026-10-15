@@ -14,13 +14,16 @@ const links = [
   { href: '/dashboard/billing', label: 'Billing', icon: '$', managerOnly: true },
   { href: '/dashboard/referrals', label: 'Referrals', icon: '✦', managerOnly: true },
   { href: '/dashboard/settings', label: 'Settings', icon: '⚙', managerOnly: false },
+  { href: '/dashboard/admin', label: 'Merchants', icon: '⚖', managerOnly: true, adminOnly: true },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const user = getStoredUser();
-  const visible = links.filter((l) => !l.managerOnly || user?.role !== 'attendant');
+  const visible = links.filter(
+    (l) => (!l.managerOnly || user?.role !== 'attendant') && (!l.adminOnly || user?.isAdmin)
+  );
 
   async function logout() {
     await api.post('/api/auth/logout').catch(() => {});

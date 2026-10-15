@@ -1,6 +1,9 @@
 // Smoke test: server + Neon must be running first (npm run dev, DATABASE_URL set).
 // Exercises the full merchant flow end-to-end against the API contract.
 import crypto from 'node:crypto';
+import { PrismaClient } from '@prisma/client';
+
+const db = new PrismaClient();
 
 const base = process.env.APP_URL ?? 'http://localhost:4000';
 let failures = 0;
@@ -116,6 +119,7 @@ const callback = {
   status: 'SUCCESSFUL',
   referenceId: `ref-${Date.now()}`,
 };
+const webhookExtId = callback.externalId;
 
 r = await call('POST', '/api/v1/webhook/momo', { body: callback }); // no signature
 check('webhook without signature → 401', r.status === 401, `got ${r.status}`);
@@ -241,6 +245,76 @@ r = await call('DELETE', `/api/v1/attendants/${attendantId}`, { token });
 check('delete attendant → 200', r.status === 200, `got ${r.status}`);
 r = await call('PUT', `/api/v1/attendants/${attendantId}`, { token, body: { name: 'Ghost', phone: attendantPhone } });
 check('update deleted → 404', r.status === 404, `got ${r.status}`);
+
+// 23. sms delivery report promotes the notification
+const notif = await db.notification.findFirst({ where: { externalId: webhookExtId } });
+check('webhook notification has sms ids', (notif?.smsIds?.length ?? 0) >= 1, `got ${notif?.smsIds?.length}`);
+const report = { messageId: notif.smsIds[0], status: 'delivered' };
+r = await call('POST', '/api/v1/webhook/sms-status', { body: report });
+check('delivery without signature → 401', r.status === 401, `got ${r.status}`);
+r = await call('POST', '/api/v1/webhook/sms-status', {
+  body: report,
+  signature: crypto.createHmac('sha256', process.env.WEBHOOK_SECRET).update(JSON.stringify(report)).digest('hex'),
+});
+check('delivery report → received', r.status === 200 && r.json?.status === 'received', `got ${r.status}`);
+r = await call('GET', '/api/v1/notifications?page=1&limit=10', { token });
+check(
+  'notification is now delivered',
+  r.json?.data?.find((n) => n.senderPhone === '+244123456')?.status === 'delivered',
+  `got ${r.status}`
+);
+const unknown = { messageId: 'nope-123', status: 'delivered' };
+r = await call('POST', '/api/v1/webhook/sms-status', {
+  body: unknown,
+  signature: crypto.createHmac('sha256', process.env.WEBHOOK_SECRET).update(JSON.stringify(unknown)).digest('hex'),
+});
+check('unknown message id → unknown', r.status === 200 && r.json?.status === 'unknown', `got ${r.status}`);
+
+// 24. forgot/reset password
+r = await call('POST', '/api/v1/auth/forgot-password', { body: { phone: 'bad' } });
+check('forgot bad phone → 400', r.status === 400, `got ${r.status}`);
+r = await call('POST', '/api/v1/auth/forgot-password', { body: { phone: '+233000000000' } });
+check('forgot unknown phone → 200 (no leak)', r.status === 200, `got ${r.status}`);
+r = await call('POST', '/api/v1/auth/forgot-password', { body: { phone } });
+check('forgot own phone → 200', r.status === 200, `got ${r.status}`);
+const owner = await db.user.findUnique({ where: { phone } });
+check('reset row created', (await db.passwordReset.count({ where: { userId: owner.id } })) >= 1, 'none');
+r = await call('POST', '/api/v1/auth/reset-password', { body: { phone, code: '000000', newPassword: 'resetpass123' } });
+check('reset wrong code → 400', r.status === 400, `got ${r.status}`);
+await db.passwordReset.create({
+  data: {
+    userId: owner.id,
+    codeHash: crypto.createHash('sha256').update('123456').digest('hex'),
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+  },
+});
+r = await call('POST', '/api/v1/auth/reset-password', { body: { phone, code: '123456', newPassword: 'resetpass123' } });
+check('reset right code → 200', r.status === 200, `got ${r.status}`);
+r = await call('POST', '/api/v1/auth/login', { body: { phone, password: 'resetpass123' } });
+check('login with reset password → 200', r.status === 200, `got ${r.status}`);
+
+// 25. merchant admin
+r = await call('GET', '/api/v1/merchants', { token });
+check('merchants as owner → 403', r.status === 403, `got ${r.status}`);
+await db.user.update({ where: { phone }, data: { isAdmin: true } });
+const adminLogin = await call('POST', '/api/v1/auth/login', { body: { phone, password: 'resetpass123' } });
+const adminToken = adminLogin.json?.token;
+r = await call('GET', '/api/v1/merchants', { token: adminToken });
+check('merchants as admin → 200 + total', r.status === 200 && r.json?.total >= 1, `got ${r.status}`);
+const merchantId = r.json.data[0].id;
+r = await call('GET', `/api/v1/merchants/${merchantId}`, { token: adminToken });
+check('merchant detail → 200', r.status === 200 && r.json?.data?.id === merchantId, `got ${r.status}`);
+r = await call('PUT', `/api/v1/merchants/${merchantId}`, { token: adminToken, body: { name: 'Admin Renamed' } });
+check('merchant rename → 200', r.status === 200 && r.json?.data?.name === 'Admin Renamed', `got ${r.status}`);
+const tempPhone = `+233${Date.now().toString().slice(-9)}`;
+r = await call('POST', '/api/v1/auth/register', { body: { name: 'Temp Shop', phone: tempPhone, password: 'password123' } });
+const tempTenant = (await db.user.findUnique({ where: { phone: tempPhone } }))?.tenantId;
+r = await call('DELETE', `/api/v1/merchants/${tempTenant}`, { token: adminToken });
+check('merchant delete → 200', r.status === 200, `got ${r.status}`);
+r = await call('DELETE', `/api/v1/merchants/${tempTenant}`, { token: adminToken });
+check('merchant delete again → 404', r.status === 404, `got ${r.status}`);
+
+await db.$disconnect();
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');
 process.exit(failures ? 1 : 0);

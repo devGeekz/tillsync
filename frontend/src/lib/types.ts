@@ -8,7 +8,9 @@ export interface User {
   name: string;
   phone: string;
   email?: string;
+  momoNumber?: string;
   role: 'owner' | 'manager' | 'attendant';
+  isAdmin?: boolean;
   tenantId: string;
 }
 
@@ -95,6 +97,18 @@ export interface ReferralStats {
   pendingReferrals: number;
   totalCommission: number;
   currency: string;
+}
+
+// ─── Merchant (admin) ──────────────────────────────────
+
+export interface Merchant {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  subscriptionStatus: string;
+  subscriptionExpiresAt?: string | null;
+  createdAt: string;
 }
 
 // ─── API Response Wrappers ─────────────────────────────

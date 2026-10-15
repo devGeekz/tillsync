@@ -1,5 +1,6 @@
 ﻿import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import { prisma } from '../config/database.js';
 import { requireAuth, requireManager, signToken } from '../middleware/auth.js';
 import { PHONE_RE, required, badRequest } from '../utils/validate.js';
@@ -140,6 +141,7 @@ router.get('/me', requireAuth, async (req, res) => {
       ...(user.email ? { email: user.email } : {}),
       ...(tenant?.momoNumber ? { momoNumber: tenant.momoNumber } : {}),
       role: user.role,
+      ...(user.isAdmin ? { isAdmin: true } : {}),
       tenantId: user.tenantId,
     },
   });
@@ -157,6 +159,57 @@ router.post('/change-password', requireAuth, async (req, res) => {
   }
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } });
   res.json({ message: 'Password updated successfully' });
+});
+
+// 6-digit code over SMS, 15 minutes to use it. Always 200 for well-formed numbers
+// so attackers can't probe which phones are registered.
+router.post('/forgot-password', async (req, res) => {
+  const { phone } = req.body ?? {};
+  if (!phone || !PHONE_RE.test(phone)) {
+    return res.status(400).json({ error: 'Validation failed', details: [{ field: 'phone', message: 'Invalid phone number' }] });
+  }
+
+  const user = await prisma.user.findUnique({ where: { phone } });
+  if (user) {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    await prisma.$transaction([
+      prisma.passwordReset.deleteMany({ where: { userId: user.id } }),
+      prisma.passwordReset.create({
+        data: {
+          userId: user.id,
+          codeHash: crypto.createHash('sha256').update(code).digest('hex'),
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      }),
+    ]);
+    console.log(`[sms:stub] password reset code for ${phone}: ${code}`);
+  }
+  res.json({ message: 'If that number is registered, a reset code is on its way' });
+});
+
+router.post('/reset-password', async (req, res) => {
+  const { phone, code, newPassword } = req.body ?? {};
+  const details = required(req.body, ['phone', 'code', 'newPassword']);
+  if (newPassword && newPassword.length < 8) details.push({ field: 'newPassword', message: 'Password must be at least 8 characters' });
+  if (details.length) return badRequest(res, details);
+
+  const generic = () => res.status(400).json({ error: 'Invalid or expired code' });
+  const user = await prisma.user.findUnique({ where: { phone } });
+  if (!user) return generic();
+
+  const hash = crypto.createHash('sha256').update(String(code)).digest();
+  const rows = await prisma.passwordReset.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' } });
+  const match = rows.find((r) => {
+    const b = Buffer.from(r.codeHash, 'hex');
+    return b.length === hash.length && crypto.timingSafeEqual(b, hash);
+  });
+  if (!match || match.expiresAt < new Date()) return generic();
+
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } }),
+    prisma.passwordReset.deleteMany({ where: { userId: user.id } }),
+  ]);
+  res.json({ message: 'Password reset successfully' });
 });
 
 export default router;

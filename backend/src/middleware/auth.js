@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { prisma } from '../config/database.js';
 
 function parseCookies(header = '') {
   const out = {};
@@ -46,5 +47,12 @@ export function tillScope(req) {
 
 export function requireManager(req, res, next) {
   if (!isManager(req)) return res.status(403).json({ error: 'Not allowed for attendants' });
+  next();
+}
+
+// platform admin — checked against the DB (not the token) so revoking access is instant
+export async function requireAdmin(req, res, next) {
+  const user = await prisma.user.findUnique({ where: { id: req.auth.id }, select: { isAdmin: true } });
+  if (!user?.isAdmin) return res.status(403).json({ error: 'Admin only' });
   next();
 }

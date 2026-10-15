@@ -29,10 +29,12 @@ model User {
   email         String?
   passwordHash  String
   role          String           @default("owner") // owner | manager | attendant
+  isAdmin       Boolean          @default(false) // platform admin (manages merchants), not a shop role
   tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   tenantId      String
   createdAt     DateTime         @default(now())
   tillAssignments TillAttendant[]
+  passwordResets PasswordReset[]
 }
 
 model Till {
@@ -73,5 +75,15 @@ model Notification {
   channel     String   @default("sms")
   status      String   @default("pending")
   externalId  String?  @unique // payment provider reference — dedupes webhook retries
+  smsIds      String[] @default([]) // provider message ids for the SMS sent per payment
   createdAt   DateTime @default(now())
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  codeHash  String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }

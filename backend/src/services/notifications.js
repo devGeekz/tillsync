@@ -44,14 +44,21 @@ export async function createNotification({ tenantId, tillId, amount, currency, s
   });
 
   const message = `Till ${till.tillNumber}: GH¢${amount} received${senderName ? ` from ${senderName}` : ''}.`;
-  const delivered = await Promise.all(
-    attendants.map((a) => sendSms(a.phone, message).then(() => true).catch(() => false))
+  const sends = await Promise.all(
+    attendants.map((a) =>
+      sendSms(a.phone, message)
+        .then((r) => ({ ok: true, messageId: r.messageId }))
+        .catch(() => ({ ok: false }))
+    )
   );
-  const anyDelivered = delivered.some(Boolean);
+  const sentIds = sends.filter((s) => s.ok && s.messageId).map((s) => s.messageId);
 
   const updated = await prisma.notification.update({
     where: { id: notification.id },
-    data: { status: attendants.length === 0 ? 'pending' : anyDelivered ? 'sent' : 'failed' },
+    data: {
+      status: attendants.length === 0 ? 'pending' : sentIds.length ? 'sent' : 'failed',
+      smsIds: sentIds,
+    },
   });
 
   return { notification: updated, tillNumber: till.tillNumber };

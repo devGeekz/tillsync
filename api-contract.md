@@ -139,11 +139,10 @@ Register a new merchant account.
     "name": "Kwame's Shop",
     "phone": "+233244123456",
     "email": "kwame@example.com",
+    "momoNumber": "+233201234567",
     "role": "owner",
-    "createdAt": "2026-01-15T10:30:00Z"
-  },
-  "token": "eyJhbGciOiJIUzI1NiIs..."
-}
+    "tenantId": "tenant-uuid-here"
+  }
 ```
 
 **Errors:**
@@ -252,6 +251,47 @@ Change the current user's password.
 
 ---
 
+#### POST /api/v1/auth/forgot-password
+Request a 6-digit SMS reset code (valid 15 minutes).
+
+**Request:**
+```json
+{ "phone": "+233244123456" }
+```
+
+**Response (200):**
+```json
+{ "message": "If that number is registered, a reset code is on its way" }
+```
+
+**Notes:**
+- Always `200` for well-formed numbers — never reveals whether a phone is registered
+- Rate-limited with login/register (10 per 15 min)
+
+---
+
+#### POST /api/v1/auth/reset-password
+Set a new password with the SMS code.
+
+**Request:**
+```json
+{
+  "phone": "+233244123456",
+  "code": "482913",
+  "newPassword": "newsecurepass456"
+}
+```
+
+**Response (200):**
+```json
+{ "message": "Password reset successfully" }
+```
+
+**Errors:**
+- `400` — Invalid or expired code / new password too short
+
+---
+
 #### PUT /api/v1/auth/profile
 Update the current merchant's profile. Business name and MoMo number are saved on the tenant, the rest on the user.
 
@@ -288,6 +328,9 @@ Update the current merchant's profile. Business name and MoMo number are saved o
 
 ### 2. Merchants (Admin Only)
 
+Platform admins (`isAdmin` on the user, checked against the database) manage shops here.
+Non-admins get `403 { "error": "Admin only" }`. Phone/email come from the shop's owner.
+
 #### GET /api/v1/merchants
 List all merchants (admin only).
 
@@ -309,9 +352,7 @@ Authorization: Bearer <admin_token>
       "createdAt": "2026-01-15T10:30:00Z"
     }
   ],
-  "total": 25,
-  "page": 1,
-  "limit": 20
+  "total": 25
 }
 ```
 
@@ -750,6 +791,29 @@ X-TillSync-Signature: <HMAC-SHA256 of raw body using MOMO_WEBHOOK_SECRET>
 
 ---
 
+#### POST /api/v1/webhook/sms-status
+Delivery report from the SMS provider. Same HMAC signature scheme.
+
+**Request (from provider):**
+```json
+{
+  "messageId": "at-msg-uuid",
+  "status": "delivered"
+}
+```
+
+**Response (200):**
+```json
+{ "status": "received" }
+```
+
+**Notes:**
+- `delivered` promotes the notification to `delivered`; `failed` is logged but doesn't
+  demote it (one SMS reaching an attendant is enough)
+- Unknown `messageId` → `{ "status": "unknown" }`, still 200
+
+---
+
 ### 6. Dashboard
 
 #### GET /api/v1/dashboard/stats
@@ -965,7 +1029,9 @@ export interface User {
   name: string;
   phone: string;
   email?: string;
+  momoNumber?: string;
   role: 'owner' | 'manager' | 'attendant';
+  isAdmin?: boolean;
   tenantId: string;
 }
 
